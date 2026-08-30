@@ -7,8 +7,8 @@ describe("Hero", () => {
     render(<Hero />);
 
     expect(screen.getByRole("heading", { name: "انتخاب برای خانم‌ها و آقایان" })).toBeInTheDocument();
-    expect(screen.getByText("زنانه")).toBeInTheDocument();
-    expect(screen.getByText("مردانه")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "زنانه" })).toHaveAttribute("href", "/category/women");
+    expect(screen.getByRole("link", { name: "مردانه" })).toHaveAttribute("href", "/category/men");
     expect(screen.getByRole("link", { name: "مشاهده محصولات" })).toHaveAttribute("href", "/shop");
   });
 });
