@@ -1,7 +1,7 @@
 export type StoreCategory = {
   slug: string;
   title: string;
-  subtitle: string;
+  subtitle?: string;
 };
 
 export type StoreProduct = {
@@ -15,9 +15,9 @@ export type StoreProduct = {
 };
 
 export const categories: StoreCategory[] = [
-  { slug: "women", title: "زنانه", subtitle: "انتخاب‌های روزمره و راحت" },
-  { slug: "men", title: "مردانه", subtitle: "مدل‌های کاربردی و باکیفیت" },
-  { slug: "shoe-care", title: "قالب و هولدر کفش", subtitle: "برای حفظ فرم بهتر کفش" },
+  { slug: "women", title: "زنانه" },
+  { slug: "men", title: "مردانه" },
+  { slug: "shoe-care", title: "هولدر کفش" },
 ];
 
 export const products: StoreProduct[] = [
