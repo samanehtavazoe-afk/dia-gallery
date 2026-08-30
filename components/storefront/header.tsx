@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const actions = [
   { href: "/wishlist", label: "علاقه‌مندی‌ها", symbol: "♡" },
   { href: "/account", label: "حساب کاربری", symbol: "○" },
@@ -8,9 +10,9 @@ export function Header() {
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--line)] bg-[color:var(--background)]/95 backdrop-blur">
       <div className="mx-auto flex min-h-16 max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8">
-        <a href="/" className="shrink-0" aria-label="دیا گالری - صفحه اصلی">
+        <Link href="/" className="shrink-0" aria-label="دیا گالری - صفحه اصلی">
           <span className="block text-lg font-semibold tracking-[0.16em]">DIAA GALLERY</span>
-        </a>
+        </Link>
 
         <nav className="hidden items-center gap-6 text-sm lg:flex" aria-label="منوی اصلی">
           <a href="/shop">فروشگاه</a>
