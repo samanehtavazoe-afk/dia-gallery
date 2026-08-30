@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import RootLayout, { metadata } from "../layout";
 
@@ -7,14 +7,12 @@ describe("RootLayout", () => {
     expect(metadata.title).toBe("دیا گالری | فروشگاه آنلاین");
     expect(metadata.description).toContain("دیا گالری");
 
-    const { container } = render(
+    const markup = renderToStaticMarkup(
       <RootLayout>
         <main>محتوا</main>
       </RootLayout>,
     );
 
-    const html = container.querySelector("html");
-    expect(html).toHaveAttribute("lang", "fa");
-    expect(html).toHaveAttribute("dir", "rtl");
+    expect(markup).toContain('<html lang="fa" dir="rtl">');
   });
 });
