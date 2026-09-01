@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "vazirmatn/Vazirmatn-font-face.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,7 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fa" dir="rtl">
-      <body>{children}</body>
+      <body className="font-vazirmatn">{children}</body>
     </html>
   );
 }

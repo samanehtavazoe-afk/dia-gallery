@@ -14,5 +14,6 @@ describe("RootLayout", () => {
     );
 
     expect(markup).toContain('<html lang="fa" dir="rtl">');
+      expect(markup).toContain('<body class="font-vazirmatn">');
   });
 });
