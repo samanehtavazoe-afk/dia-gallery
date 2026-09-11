@@ -15,14 +15,16 @@ export function Header() {
           <Image src="/diaa-gallery.png.PNG" alt="لوگوی دیا گالری" width={1024} height={1024} priority className="h-auto w-20 sm:w-24" />
         </Link>
 
-        <nav className="hidden items-center gap-6 text-sm lg:flex" aria-label="منوی اصلی">
+        <nav className="hidden items-center gap-4 whitespace-nowrap text-xs xl:flex" aria-label="منوی اصلی">
           <a href="/shop">فروشگاه</a>
-          <a href="/category/women">زنانه</a>
-          <a href="/category/men">مردانه</a>
-          <a href="/category/shoe-care">قالب و هولدر کفش</a>
+          <a href="/category/women-underwear">لباس زیر زنانه</a>
+          <a href="/category/men-underwear">لباس زیر مردانه</a>
+          <a href="/category/men-undershirt">زیرپوش مردانه</a>
+          <a href="/category/hoodie">هودی</a>
+          <a href="/category/shoe-holder">هولدر کفش</a>
         </nav>
 
-        <form className="me-auto hidden max-w-sm flex-1 md:block" role="search">
+        <form className="me-auto hidden max-w-xs flex-1 md:block" role="search">
           <label htmlFor="site-search" className="sr-only">
             جستجوی محصولات
           </label>
@@ -50,3 +52,4 @@ export function Header() {
     </header>
   );
 }
+

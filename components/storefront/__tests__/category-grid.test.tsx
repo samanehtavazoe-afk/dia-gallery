@@ -3,22 +3,26 @@ import { describe, expect, it } from "vitest";
 import { CategoryGrid } from "../category-grid";
 
 describe("CategoryGrid", () => {
-  it("renders simple category labels without descriptive subtitles", () => {
+  it("renders the five approved product categories with their images", () => {
     render(
       <CategoryGrid
         categories={[
-          { slug: "women", title: "زنانه", subtitle: "انتخاب زنانه" },
-          { slug: "men", title: "مردانه", subtitle: "انتخاب مردانه" },
-          { slug: "shoe-care", title: "هولدر کفش", subtitle: "برای حفظ فرم بهتر کفش" },
+          { slug: "women-underwear", title: "لباس زیر زنانه", image: "/categories/women-underwear.jpg", imageAlt: "لباس زیر زنانه مشکی" },
+          { slug: "men-underwear", title: "لباس زیر مردانه", image: "/categories/men-underwear.jpg", imageAlt: "لباس زیر مردانه خاکستری" },
+          { slug: "men-undershirt", title: "زیرپوش مردانه", image: "/categories/men-undershirt.png", imageAlt: "زیرپوش مردانه طوسی" },
+          { slug: "hoodie", title: "هودی", image: "/categories/hoodie.png", imageAlt: "هودی مینیمال" },
+          { slug: "shoe-holder", title: "هولدر کفش", image: "/categories/shoe-holder.png", imageAlt: "هولدر داخل کفش زنانه و مردانه" },
         ]}
       />,
     );
 
-    expect(screen.getByRole("link", { name: "زنانه" })).toHaveAttribute("href", "/category/women");
-    expect(screen.getByRole("link", { name: "مردانه" })).toHaveAttribute("href", "/category/men");
-    expect(screen.getByRole("link", { name: "هولدر کفش" })).toHaveAttribute("href", "/category/shoe-care");
-    expect(screen.queryByText("انتخاب زنانه")).not.toBeInTheDocument();
-    expect(screen.queryByText("انتخاب مردانه")).not.toBeInTheDocument();
-    expect(screen.queryByText("برای حفظ فرم بهتر کفش")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "لباس زیر زنانه" })).toHaveAttribute("href", "/category/women-underwear");
+    expect(screen.getByRole("link", { name: "لباس زیر مردانه" })).toHaveAttribute("href", "/category/men-underwear");
+    expect(screen.getByRole("link", { name: "زیرپوش مردانه" })).toHaveAttribute("href", "/category/men-undershirt");
+    expect(screen.getByRole("link", { name: "هودی" })).toHaveAttribute("href", "/category/hoodie");
+    expect(screen.getByRole("link", { name: "هولدر کفش" })).toHaveAttribute("href", "/category/shoe-holder");
+    expect(screen.getByRole("img", { name: "لباس زیر زنانه مشکی" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "هولدر داخل کفش زنانه و مردانه" })).toBeInTheDocument();
   });
 });
+

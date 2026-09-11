@@ -1,7 +1,8 @@
 export type StoreCategory = {
   slug: string;
   title: string;
-  subtitle?: string;
+  image: string;
+  imageAlt: string;
 };
 
 export type StoreProduct = {
@@ -15,9 +16,36 @@ export type StoreProduct = {
 };
 
 export const categories: StoreCategory[] = [
-  { slug: "women", title: "زنانه" },
-  { slug: "men", title: "مردانه" },
-  { slug: "shoe-care", title: "هولدر کفش" },
+  {
+    slug: "women-underwear",
+    title: "لباس زیر زنانه",
+    image: "/categories/women-underwear.webp",
+    imageAlt: "لباس زیر زنانه مشکی",
+  },
+  {
+    slug: "men-underwear",
+    title: "لباس زیر مردانه",
+    image: "/categories/men-underwear.webp",
+    imageAlt: "لباس زیر مردانه خاکستری",
+  },
+  {
+    slug: "men-undershirt",
+    title: "زیرپوش مردانه",
+    image: "/categories/men-undershirt.webp",
+    imageAlt: "زیرپوش مردانه طوسی",
+  },
+  {
+    slug: "hoodie",
+    title: "هودی",
+    image: "/categories/hoodie.webp",
+    imageAlt: "هودی مینیمال",
+  },
+  {
+    slug: "shoe-holder",
+    title: "هولدر کفش",
+    image: "/categories/shoe-holder-cream.webp",
+    imageAlt: "هولدر داخل کفش زنانه و مردانه",
+  },
 ];
 
 export const products: StoreProduct[] = [
@@ -74,3 +102,4 @@ export function buildHomepageCollections(
 
   return { today, latest, discounted };
 }
+

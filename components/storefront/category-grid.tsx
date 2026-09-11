@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { StoreCategory } from "@/lib/storefront-data";
 
 export function CategoryGrid({ categories }: { categories: StoreCategory[] }) {
@@ -15,17 +16,28 @@ export function CategoryGrid({ categories }: { categories: StoreCategory[] }) {
         </a>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 lg:gap-4">
         {categories.map((category) => (
           <a
             key={category.slug}
             href={`/category/${category.slug}`}
-            className="group flex min-h-24 items-center justify-center rounded-[var(--radius-card)] border border-[var(--line)] bg-white px-3 py-4 text-center transition-transform hover:-translate-y-1 sm:min-h-28"
+            aria-label={category.title}
+            className="group overflow-hidden rounded-[var(--radius-card)] border border-[var(--line)] bg-[var(--surface)] p-2.5 text-center shadow-[0_12px_40px_rgba(33,31,29,0.04)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_16px_46px_rgba(33,31,29,0.09)] sm:p-3"
           >
-            <h3 className="text-sm font-semibold sm:text-base">{category.title}</h3>
+            <div className="relative aspect-[4/5] overflow-hidden rounded-[calc(var(--radius-card)-0.45rem)] bg-[var(--accent-soft)]">
+              <Image
+                src={category.image}
+                alt={category.imageAlt}
+                fill
+                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+                className="object-contain p-2 transition duration-500 group-hover:scale-[1.035] sm:p-3"
+              />
+            </div>
+            <h3 className="px-1 pb-1 pt-3 text-sm font-semibold sm:text-base">{category.title}</h3>
           </a>
         ))}
       </div>
     </section>
   );
 }
+
