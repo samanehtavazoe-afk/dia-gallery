@@ -1,0 +1,9 @@
+.git
+.github
+.worktrees
+.env
+node_modules
+__pycache__
+*.pyc
+staticfiles
+.DS_Store
