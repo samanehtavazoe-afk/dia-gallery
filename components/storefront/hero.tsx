@@ -1,9 +1,9 @@
 import Image from "next/image";
 
 const slides = [
-  { src: "/categories/women-underwear.webp", alt: "منتخب لباس زیر زنانه" },
-  { src: "/categories/men-undershirt.webp", alt: "منتخب پوشاک مردانه" },
-  { src: "/categories/shoe-holder-cream.webp", alt: "هولدر کفش زنانه و مردانه" },
+  { src: "/hero-homewear-duo.webp", alt: "استایل راحتی زنانه و مردانه دیا گالری" },
+  { src: "/hero-homewear-women.webp", alt: "استایل راحتی زنانه دیا گالری" },
+  { src: "/hero-homewear-men.webp", alt: "استایل راحتی مردانه دیا گالری" },
 ];
 
 export function Hero() {
@@ -17,7 +17,7 @@ export function Hero() {
               انتخاب خوب، خرید آسان
             </h1>
             <p className="max-w-xl text-sm leading-8 text-white/70 sm:text-base">
-              پوشاک روزمره و هولدر کفش؛ انتخاب‌های کاربردی با یک تجربه خرید ساده و روشن.
+              پوشاک راحت و کاربردی برای خانه و روزمره؛ با یک تجربه خرید ساده و روشن.
             </p>
           </div>
           <a
@@ -36,7 +36,7 @@ export function Hero() {
                 fill
                 sizes="(max-width: 1024px) 100vw, 55vw"
                 preload={index === 0}
-                className="object-contain p-6 sm:p-10"
+                className="object-cover object-center"
               />
             </div>
           ))}
@@ -48,4 +48,3 @@ export function Hero() {
     </section>
   );
 }
-
