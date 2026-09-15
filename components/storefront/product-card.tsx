@@ -17,6 +17,12 @@ export function ProductCard({ product }: { product: StoreProduct }) {
         >
           ♡
         </button>
+
+        {!product.available ? (
+          <span className="absolute bottom-3 right-3 rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-[var(--foreground)]">
+            ناموجود
+          </span>
+        ) : null}
       </div>
 
       <div className="space-y-3 p-4">
