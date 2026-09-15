@@ -28,7 +28,7 @@ export default async function ShopPage() {
           <p className="mb-2 text-sm text-[var(--muted)]">فروشگاه دیا گالری</p>
           <h1 className="text-3xl font-semibold">همه محصولات</h1>
         </section>
-        <ProductGrid products={products} title="همه محصولات" />
+        <ProductGrid products={products} title="محصولات" />
       </main>
       <Footer />
       <MobileNav />
