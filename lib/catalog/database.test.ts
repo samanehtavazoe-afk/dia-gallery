@@ -3,7 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { CatalogDatabase } from "./database";
-import { migrateCatalogDatabase, openCatalogDatabase } from "./database";
+import {
+  migrateCatalogDatabase,
+  openCatalogDatabase,
+  resolveCatalogDatabasePath,
+} from "./database";
 
 let database: CatalogDatabase | undefined;
 let directory: string | undefined;
@@ -19,6 +23,12 @@ afterEach(() => {
 });
 
 describe("catalog database", () => {
+  it("uses the deployment database path by default in production", () => {
+    expect(
+      resolveCatalogDatabasePath({ NODE_ENV: "production" }, "C:/app"),
+    ).toBe("/var/lib/dia-gallery/data/dia-gallery.sqlite");
+  });
+
   it("creates the catalog tables and enables foreign keys", () => {
     database = openCatalogDatabase(":memory:");
 

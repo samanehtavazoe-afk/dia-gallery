@@ -4,10 +4,20 @@ import { dirname, join } from "node:path";
 
 export type CatalogDatabase = InstanceType<typeof Database>;
 
-const defaultDatabasePath = join(process.cwd(), ".data", "dia-gallery.sqlite");
+export function resolveCatalogDatabasePath(
+  environment: Pick<NodeJS.ProcessEnv, "DIA_DB_PATH" | "NODE_ENV"> = process.env,
+  workingDirectory = process.cwd(),
+) {
+  return (
+    environment.DIA_DB_PATH ??
+    (environment.NODE_ENV === "production"
+      ? "/var/lib/dia-gallery/data/dia-gallery.sqlite"
+      : join(workingDirectory, ".data", "dia-gallery.sqlite"))
+  );
+}
 
 export function openCatalogDatabase(
-  path = process.env.DIA_DB_PATH ?? defaultDatabasePath,
+  path = resolveCatalogDatabasePath(),
 ) {
   if (path !== ":memory:") {
     mkdirSync(dirname(path), { recursive: true });
