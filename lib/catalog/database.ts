@@ -1,8 +1,18 @@
 import Database from "better-sqlite3";
+import { mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 export type CatalogDatabase = InstanceType<typeof Database>;
 
-export function openCatalogDatabase(path = process.env.DIA_DB_PATH ?? ":memory:") {
+const defaultDatabasePath = join(process.cwd(), ".data", "dia-gallery.sqlite");
+
+export function openCatalogDatabase(
+  path = process.env.DIA_DB_PATH ?? defaultDatabasePath,
+) {
+  if (path !== ":memory:") {
+    mkdirSync(dirname(path), { recursive: true });
+  }
+
   const db = new Database(path);
 
   db.pragma("foreign_keys = ON");
