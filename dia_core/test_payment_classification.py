@@ -1,9 +1,12 @@
 from types import SimpleNamespace
 
-from django.test import SimpleTestCase
+from django.contrib.auth import get_user_model
+from django.test import SimpleTestCase, TestCase
+from django.urls import reverse
+from django.utils import timezone
 
 from . import services
-from .models import SaleOrder
+from .models import Business, SaleDay, SaleOrder, SalesChannel
 
 
 class SalePaymentClassificationTests(SimpleTestCase):
@@ -39,3 +42,36 @@ class SalePaymentClassificationTests(SimpleTestCase):
                 payment_provider=SimpleNamespace(code=code),
             )
             self.assertEqual(status, SaleOrder.PaymentStatus.PENDING)
+
+
+class SalePaymentViewTests(TestCase):
+    def setUp(self):
+        user = get_user_model().objects.create_user(
+            username="payment-view-test",
+            password="test-pass-123",
+        )
+        self.client.force_login(user)
+        self.business = Business.objects.create(
+            code="payment-view-business",
+            title="Payment View Business",
+            active=True,
+        )
+        self.digikala = SalesChannel.objects.create(
+            code="digikala",
+            title="دیجی‌کالا",
+            active=True,
+        )
+        self.day = SaleDay.objects.create(date=timezone.localdate())
+
+    def test_new_digikala_order_defaults_to_pending(self):
+        response = self.client.post(
+            reverse("sale_day", args=[self.day.id]),
+            {
+                "business": self.business.id,
+                "sales_channel": self.digikala.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        order = SaleOrder.objects.get()
+        self.assertEqual(order.payment_status, SaleOrder.PaymentStatus.PENDING)
