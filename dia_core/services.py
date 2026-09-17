@@ -13,6 +13,7 @@ from .models import (
     PurchaseLine,
     ReturnRecord,
     SaleLine,
+    SaleOrder,
     StockBalance,
     StockLocation,
 )
@@ -118,6 +119,25 @@ def sale_cost_snapshots(*, sale_price, variant, sales_channel=None, payment_prov
         "provider_tax_unit_snapshot": provider_tax,
     }
 
+
+def sale_payment_mode(*, sales_channel=None, payment_provider=None):
+    channel_code = (getattr(sales_channel, "code", "") or "").strip().lower()
+    provider_code = (getattr(payment_provider, "code", "") or "").strip().lower()
+
+    if channel_code in {"digikala", "basalam"}:
+        return "platform_receivable"
+    if provider_code in {"snapp", "digipay", "torobpay"}:
+        return "platform_receivable"
+    return "cash"
+
+
+def default_sale_payment_status(*, sales_channel=None, payment_provider=None):
+    if sale_payment_mode(
+        sales_channel=sales_channel,
+        payment_provider=payment_provider,
+    ) == "platform_receivable":
+        return SaleOrder.PaymentStatus.PENDING
+    return SaleOrder.PaymentStatus.RECEIVED
 
 
 def main_location():
