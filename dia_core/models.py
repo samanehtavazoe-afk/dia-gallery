@@ -429,6 +429,66 @@ class PlatformSettlement(models.Model):
 
 
 
+
+class HolderDirectOrder(models.Model):
+    date = models.DateField(db_index=True)
+    customer_name = models.CharField(max_length=160)
+    quantity_small = models.PositiveIntegerField(default=0)
+    quantity_medium = models.PositiveIntegerField(default=0)
+    quantity_large = models.PositiveIntegerField(default=0)
+    unit_price_small = models.PositiveBigIntegerField(default=0)
+    unit_price_medium = models.PositiveBigIntegerField(default=0)
+    unit_price_large = models.PositiveBigIntegerField(default=0)
+    order_total = models.PositiveBigIntegerField(default=0)
+    note = models.CharField(max_length=250, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date", "-id"]
+
+    @property
+    def remaining_balance(self):
+        received = self.receipts.aggregate(
+            total=models.Sum("amount")
+        )["total"] or 0
+        return max(int(self.order_total or 0) - int(received), 0)
+
+
+class HolderDirectReceipt(models.Model):
+    class ReceiptType(models.TextChoices):
+        DEPOSIT = "deposit", "بیعانه"
+        FULL = "full", "تسویه کامل"
+        BALANCE = "balance", "پرداخت مانده"
+
+    class Recipient(models.TextChoices):
+        SAMANEH = "samaneh", "سمانه"
+        MEHR = "mehr", "مهر"
+
+    order = models.ForeignKey(
+        HolderDirectOrder,
+        on_delete=models.CASCADE,
+        related_name="receipts",
+    )
+    date = models.DateField(db_index=True)
+    amount = models.PositiveBigIntegerField(
+        validators=[MinValueValidator(1)]
+    )
+    receipt_type = models.CharField(
+        max_length=20,
+        choices=ReceiptType.choices,
+    )
+    recipient = models.CharField(
+        max_length=20,
+        choices=Recipient.choices,
+    )
+    note = models.CharField(max_length=250, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date", "-id"]
+
+
+
 class Counterparty(models.Model):
     title = models.CharField(max_length=120)
     business = models.ForeignKey(

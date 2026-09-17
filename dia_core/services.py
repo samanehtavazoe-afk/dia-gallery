@@ -509,3 +509,66 @@ def platform_receivable_totals():
         totals[bucket] += amount
 
     return totals
+
+
+
+@transaction.atomic
+def record_holder_receipt(
+    *,
+    order,
+    amount,
+    receipt_type,
+    recipient,
+    date,
+    note="",
+):
+    from .models import HolderDirectOrder, HolderDirectReceipt
+
+    amount = int(amount or 0)
+    if amount <= 0:
+        raise ValueError("مبلغ دریافت باید بیشتر از صفر باشد.")
+
+    if receipt_type not in HolderDirectReceipt.ReceiptType.values:
+        raise ValueError("نوع دریافت نامعتبر است.")
+
+    if recipient not in HolderDirectReceipt.Recipient.values:
+        raise ValueError("دریافت‌کننده نامعتبر است.")
+
+    order = HolderDirectOrder.objects.select_for_update().get(pk=order.pk)
+
+    if amount > order.remaining_balance:
+        raise ValueError("مبلغ دریافت از مانده مشتری بیشتر است.")
+
+    receipt = HolderDirectReceipt.objects.create(
+        order=order,
+        amount=amount,
+        receipt_type=receipt_type,
+        recipient=recipient,
+        date=date,
+        note=note or "",
+    )
+
+    if recipient == HolderDirectReceipt.Recipient.SAMANEH:
+        bank_account = (
+            Account.objects
+            .filter(kind=Account.Kind.CASH, active=True)
+            .order_by("id")
+            .first()
+        )
+        if bank_account is None:
+            raise ValueError("حساب بانکی فعالی تعریف نشده است.")
+
+        bank_account = Account.objects.select_for_update().get(
+            pk=bank_account.pk
+        )
+
+        create_account_entry(
+            account=bank_account,
+            date=date,
+            delta=amount,
+            title="دریافت فروش هولدر",
+            reference=f"holder-receipt:{receipt.id}",
+            note=note,
+        )
+
+    return receipt
