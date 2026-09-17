@@ -1,4 +1,6 @@
+from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from . import services
@@ -18,6 +20,11 @@ from .models import (
 
 class PlatformReceivableTests(TestCase):
     def setUp(self):
+        user = get_user_model().objects.create_user(
+            username="platform-receivable-test",
+            password="test-pass-123",
+        )
+        self.client.force_login(user)
         self.business = Business.objects.create(
             code="receivable-business",
             title="Receivable Business",
@@ -152,3 +159,13 @@ class PlatformReceivableTests(TestCase):
         totals = services.platform_receivable_totals()
 
         self.assertEqual(totals["digikala"], 0)
+
+    def test_finance_page_shows_platform_receivable_summary(self):
+        self._order(channel="digikala", digikala_fee=100)
+
+        response = self.client.get(reverse("finance"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("platform_receivables", response.context)
+        self.assertEqual(response.context["platform_receivables"]["digikala"], 900)
+        self.assertContains(response, "طلب از پلتفرم‌ها")
