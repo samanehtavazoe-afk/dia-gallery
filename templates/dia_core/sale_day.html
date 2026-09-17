@@ -22,6 +22,45 @@
   </div>
 </div>
 
+{% if not mode %}
+<div class="row g-3 mb-4">
+  <div class="col-12 col-md-6">
+    <a class="card h-100 text-decoration-none" href="{{ request.path }}?mode=digikala">
+      <div class="card-body py-4">
+        <h3 class="card-title mb-1">دیجی‌کالا</h3>
+        <div class="text-secondary">ثبت فروش دیجی‌کالا</div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-12 col-md-6">
+    <a class="card h-100 text-decoration-none" href="{{ request.path }}?mode=site">
+      <div class="card-body py-4">
+        <h3 class="card-title mb-1">سایت</h3>
+        <div class="text-secondary">ثبت فروش سایت</div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-12 col-md-6">
+    <a class="card h-100 text-decoration-none" href="{{ request.path }}?mode=basalam">
+      <div class="card-body py-4">
+        <h3 class="card-title mb-1">باسلام</h3>
+        <div class="text-secondary">ثبت فروش باسلام</div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-12 col-md-6">
+    <a class="card h-100 text-decoration-none" href="{{ request.path }}?mode=holder">
+      <div class="card-body py-4">
+        <h3 class="card-title mb-1">فروش قالب</h3>
+        <div class="text-secondary">ثبت فروش مستقیم هولدر</div>
+      </div>
+    </a>
+  </div>
+</div>
+{% else %}
 
 <div class="row g-2 mb-4">
   <div class="col-6 col-xl-2">
@@ -344,6 +383,7 @@
 
 </form>
 
+{% endif %}
 
 <div class="card">
   <div class="card-header">

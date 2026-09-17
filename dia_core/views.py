@@ -235,6 +235,15 @@ def select_sale_day(request, jy, jm, jd):
 def sale_day(request, day_id):
     day = get_object_or_404(SaleDay, id=day_id)
 
+    mode = (
+        request.POST.get("mode")
+        if request.method == "POST"
+        else request.GET.get("mode")
+    ) or ""
+    mode = mode.strip().lower()
+    if mode not in {"digikala", "site", "basalam", "holder"}:
+        mode = ""
+
     businesses = list(Business.objects.filter(active=True).order_by("title"))
     channels = list(SalesChannel.objects.filter(active=True).order_by("title"))
     providers = list(PaymentProvider.objects.filter(active=True).order_by("title"))
@@ -704,6 +713,7 @@ def sale_day(request, day_id):
         {
             "day": day,
             "date_j": format_jalali(day.date),
+            "mode": mode,
             "rows": rows,
             "total": total,
             "businesses": businesses,
