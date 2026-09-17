@@ -277,3 +277,88 @@ class FinanceSaleOrderTests(TestCase):
 
         self.assertFalse(hasattr(line1, "shipping_cost_snapshot"))
         self.assertFalse(hasattr(line2, "shipping_cost_snapshot"))
+
+class FinanceSettingsSetupTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+
+        self.user = get_user_model().objects.create_user(
+            username="finance-settings-test",
+            password="test-pass-123",
+        )
+        self.client.force_login(self.user)
+
+        self.product = Product.objects.create(
+            code="SETTINGS-P1",
+            title="Settings Product",
+        )
+
+    def test_settings_page_has_clean_title_and_setup_forms(self):
+        from django.urls import reverse
+
+        response = self.client.get(reverse("settings_home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "<title>تنظیمات | Dia Gallery</title>",
+            html=True,
+        )
+        self.assertContains(response, 'value="business"')
+        self.assertContains(response, 'value="sales_channel"')
+        self.assertContains(response, 'value="payment_provider"')
+        self.assertContains(response, 'value="product_business"')
+
+    def test_settings_can_create_entities_and_assign_product(self):
+        from django.urls import reverse
+        from dia_core.models import Business, PaymentProvider, SalesChannel
+
+        self.client.raise_request_exception = False
+        url = reverse("settings_home")
+
+        response = self.client.post(
+            url,
+            {
+                "action": "business",
+                "code": "dia",
+                "title": "Dia",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        business = Business.objects.get(code="dia")
+
+        response = self.client.post(
+            url,
+            {
+                "action": "sales_channel",
+                "code": "site",
+                "title": "سایت",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(SalesChannel.objects.filter(code="site").exists())
+
+        response = self.client.post(
+            url,
+            {
+                "action": "payment_provider",
+                "code": "snapp",
+                "title": "اسنپ",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(PaymentProvider.objects.filter(code="snapp").exists())
+
+        response = self.client.post(
+            url,
+            {
+                "action": "product_business",
+                "product": self.product.id,
+                "business": business.id,
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.business, business)

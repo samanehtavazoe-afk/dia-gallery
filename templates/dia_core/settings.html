@@ -1,92 +1,84 @@
-{% extends 'dia_core/base.html' %}{% load dia_tags %}{% block title %}تنظیمات | Dia Gallery
+{% extends 'dia_core/base.html' %}{% load dia_tags %}{% block title %}تنظیمات | Dia Gallery{% endblock %}{% block content %}
+
 <div class="card mb-4">
-  <div class="card-header">
-    <div>
-      <h3 class="card-title mb-1">قیمت فروش هر کانال</h3>
-      <div class="text-secondary small">
-        برای هر واریانت می‌توانی قیمت سایت، باسلام، دیجی‌کالا یا حضوری را جدا ثبت کنی.
-      </div>
-    </div>
-  </div>
+<div class="card-header"><h3 class="card-title mb-0">تعاریف فروش و بیزنس</h3></div>
+<div class="card-body">
+<div class="row g-3">
 
-  <div class="card-body">
-    <form method="post" class="row g-2">
-      {% csrf_token %}
-      <input type="hidden" name="action" value="channel_price">
-
-      <div class="col-md-5">
-        <label class="form-label">محصول / مدل</label>
-        <select class="form-select" name="variant" required>
-          <option value="">انتخاب</option>
-          {% for v in variants %}
-            <option value="{{ v.id }}">
-              {{ v.product.code }} / {{ v.size.name }} / {{ v.color.name }}
-            </option>
-          {% endfor %}
-        </select>
-      </div>
-
-      <div class="col-md-3">
-        <label class="form-label">کانال فروش</label>
-        <select class="form-select" name="sales_channel" required>
-          <option value="">انتخاب</option>
-          {% for c in sales_channels %}
-            <option value="{{ c.id }}">{{ c.title }}</option>
-          {% endfor %}
-        </select>
-      </div>
-
-      <div class="col-md-3">
-        <label class="form-label">قیمت فروش</label>
-        <input
-          class="form-control money"
-          type="number"
-          min="0"
-          name="sale_price"
-          required
-        >
-      </div>
-
-      <div class="col-md-1 d-flex align-items-end">
-        <button class="btn btn-primary w-100">ذخیره</button>
-      </div>
-    </form>
-  </div>
-
-  <div class="table-responsive">
-    <table class="table table-vcenter">
-      <thead>
-        <tr>
-          <th>محصول</th>
-          <th>سایز</th>
-          <th>رنگ</th>
-          <th>کانال</th>
-          <th>قیمت فروش</th>
-        </tr>
-      </thead>
-
-      <tbody>
-        {% for row in channel_prices %}
-          <tr>
-            <td>{{ row.variant.product.code }}</td>
-            <td>{{ row.variant.size.name }}</td>
-            <td>{{ row.variant.color.name }}</td>
-            <td>{{ row.sales_channel.title }}</td>
-            <td class="money">{{ row.sale_price|groupnum }}</td>
-          </tr>
-        {% empty %}
-          <tr>
-            <td colspan="5" class="text-center text-secondary py-4">
-              هنوز قیمت اختصاصی برای هیچ کانالی ثبت نشده.
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+<div class="col-lg-4">
+<form method="post">{% csrf_token %}
+<input type="hidden" name="action" value="business">
+<label class="form-label">بیزنس</label>
+<input class="form-control mb-2" name="code" placeholder="مثلاً dia" required>
+<input class="form-control mb-2" name="title" placeholder="مثلاً Dia" required>
+<button class="btn btn-primary w-100">ذخیره بیزنس</button>
+</form>
 </div>
 
-{% endblock %}{% block content %}
+<div class="col-lg-4">
+<form method="post">{% csrf_token %}
+<input type="hidden" name="action" value="sales_channel">
+<label class="form-label">کانال فروش</label>
+<input class="form-control mb-2" name="code" placeholder="مثلاً site" required>
+<input class="form-control mb-2" name="title" placeholder="مثلاً سایت" required>
+<button class="btn btn-primary w-100">ذخیره کانال</button>
+</form>
+</div>
+
+<div class="col-lg-4">
+<form method="post">{% csrf_token %}
+<input type="hidden" name="action" value="payment_provider">
+<label class="form-label">روش پرداخت</label>
+<input class="form-control mb-2" name="code" placeholder="مثلاً snapp" required>
+<input class="form-control mb-2" name="title" placeholder="مثلاً اسنپ" required>
+<button class="btn btn-primary w-100">ذخیره روش پرداخت</button>
+</form>
+</div>
+
+<div class="col-lg-6">
+<form method="post">{% csrf_token %}
+<input type="hidden" name="action" value="product_business">
+<label class="form-label">اتصال محصول به بیزنس</label>
+<select class="form-select mb-2" name="product" required>
+<option value="">محصول</option>
+{% for p in products %}
+<option value="{{ p.id }}">{{ p.code }}{% if p.business %} — {{ p.business.title }}{% endif %}</option>
+{% endfor %}
+</select>
+<select class="form-select mb-2" name="business" required>
+<option value="">بیزنس</option>
+{% for b in businesses %}
+<option value="{{ b.id }}">{{ b.title }}</option>
+{% endfor %}
+</select>
+<button class="btn btn-primary w-100">ثبت بیزنس محصول</button>
+</form>
+</div>
+
+<div class="col-lg-6">
+<form method="post">{% csrf_token %}
+<input type="hidden" name="action" value="channel_price">
+<label class="form-label">قیمت فروش هر کانال</label>
+<select class="form-select mb-2" name="variant" required>
+<option value="">محصول / مدل</option>
+{% for v in variants %}
+<option value="{{ v.id }}">{{ v.product.code }} / {{ v.size.name }} / {{ v.color.name }}</option>
+{% endfor %}
+</select>
+<select class="form-select mb-2" name="sales_channel" required>
+<option value="">کانال فروش</option>
+{% for c in sales_channels %}
+<option value="{{ c.id }}">{{ c.title }}</option>
+{% endfor %}
+</select>
+<input class="form-control money mb-2" type="number" min="0" name="sale_price" placeholder="قیمت فروش" required>
+<button class="btn btn-primary w-100">ذخیره قیمت کانال</button>
+</form>
+</div>
+
+</div>
+</div>
+</div>
 <div class="mb-4"><div class="page-kicker">تنظیمات و تعاریف</div><h1 class="page-title mb-1">کاتالوگ Dia Gallery</h1><div class="text-secondary">این نصب عمداً خالی است؛ محصولات، سایزها و رنگ‌ها را از همین‌جا تعریف کن.</div></div>
 <div class="row g-3 mb-4">
 <div class="col-lg-4"><div class="card h-100"><div class="card-header"><h3 class="card-title mb-0">سایز جدید</h3></div><div class="card-body"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="size"><div class="mb-3"><label class="form-label">نام سایز</label><input class="form-control" name="name" required></div><div class="mb-3"><label class="form-label">ترتیب</label><input class="form-control num" type="number" name="sort_order" value="0"></div><button class="btn btn-primary w-100">اضافه کردن سایز</button></form><hr>{% for row in sizes %}<span class="badge bg-secondary-lt me-1 mb-1">{{ row.name }}</span>{% empty %}<small class="text-secondary">هنوز سایزی نیست.</small>{% endfor %}</div></div></div>

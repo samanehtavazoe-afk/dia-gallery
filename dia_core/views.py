@@ -995,6 +995,53 @@ def settings_home(request):
             variant.save(update_fields=["default_sale_price", "unit_cost", "active"])
             stock_for(variant)
             messages.success(request, "مدل/واریانت محصول ذخیره شد.")
+        elif action == "business":
+            code = (request.POST.get("code") or "").strip()
+            title = (request.POST.get("title") or "").strip()
+            if not code or not title:
+                raise ValueError("کد و نام بیزنس را وارد کن.")
+            Business.objects.update_or_create(
+                code=code,
+                defaults={"title": title, "active": True},
+            )
+            messages.success(request, "بیزنس ذخیره شد.")
+
+        elif action == "sales_channel":
+            code = (request.POST.get("code") or "").strip()
+            title = (request.POST.get("title") or "").strip()
+            if not code or not title:
+                raise ValueError("کد و نام کانال فروش را وارد کن.")
+            SalesChannel.objects.update_or_create(
+                code=code,
+                defaults={"title": title, "active": True},
+            )
+            messages.success(request, "کانال فروش ذخیره شد.")
+
+        elif action == "payment_provider":
+            code = (request.POST.get("code") or "").strip()
+            title = (request.POST.get("title") or "").strip()
+            if not code or not title:
+                raise ValueError("کد و نام روش پرداخت را وارد کن.")
+            PaymentProvider.objects.update_or_create(
+                code=code,
+                defaults={"title": title, "active": True},
+            )
+            messages.success(request, "روش پرداخت ذخیره شد.")
+
+        elif action == "product_business":
+            product = get_object_or_404(
+                Product,
+                id=request.POST.get("product"),
+            )
+            business = get_object_or_404(
+                Business,
+                id=request.POST.get("business"),
+                active=True,
+            )
+            product.business = business
+            product.save(update_fields=["business"])
+            messages.success(request, "بیزنس محصول ذخیره شد.")
+
         elif action == "channel_price":
             variant = get_object_or_404(
                 ProductVariant,
@@ -1045,6 +1092,8 @@ def settings_home(request):
 
     settings = {row.key: row.value for row in AppSetting.objects.all()}
     return render(request, "dia_core/settings.html", {
+        "businesses": Business.objects.filter(active=True).order_by("title"),
+        "payment_providers": PaymentProvider.objects.filter(active=True).order_by("title"),
         "sizes": Size.objects.all(),
         "colors": Color.objects.all(),
         "products": Product.objects.all(),
