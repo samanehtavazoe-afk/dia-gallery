@@ -13,6 +13,7 @@ from .models import (
     Account,
     AccountEntry,
     Business,
+    BusinessTransfer,
     AppSetting,
     Color,
     InventoryMovement,
@@ -34,6 +35,7 @@ from .models import (
 )
 from .services import (
     account_balance,
+    business_transfer_position,
     create_account_entry,
     create_adjustment,
     create_return,
@@ -931,6 +933,42 @@ def finance(request):
                 raise ValueError("نام حساب را وارد کن.")
             Account.objects.get_or_create(title=title, defaults={"opening_balance": _int(request.POST.get("opening_balance"))})
             messages.success(request, "حساب اضافه شد.")
+
+        elif action == "business_transfer":
+            from_business = get_object_or_404(
+                Business,
+                id=request.POST.get("from_business"),
+                active=True,
+            )
+            to_business = get_object_or_404(
+                Business,
+                id=request.POST.get("to_business"),
+                active=True,
+            )
+            if from_business.id == to_business.id:
+                raise ValueError("مبدا و مقصد نمی‌توانند یک بیزنس باشند.")
+
+            amount = max(0, _int(request.POST.get("amount")))
+            if amount <= 0:
+                raise ValueError("مبلغ باید بیشتر از صفر باشد.")
+
+            when = parse_jalali_date(
+                request.POST.get("date"),
+                date.today(),
+            )
+
+            BusinessTransfer.objects.create(
+                date=when,
+                from_business=from_business,
+                to_business=to_business,
+                amount=amount,
+                note=(request.POST.get("note") or "").strip()[:250],
+            )
+            messages.success(
+                request,
+                "انتقال بین بیزنس‌ها ثبت شد.",
+            )
+
         else:
             account = get_object_or_404(Account, id=request.POST.get("account"), active=True)
             amount = max(0, _int(request.POST.get("amount")))
@@ -951,11 +989,55 @@ def finance(request):
                 raise ValueError("عملیات مالی نامعتبر است.")
         return redirect("finance")
 
-    account_rows = [{"account": account, "balance": account_balance(account)} for account in accounts]
+    account_rows = [
+        {"account": account, "balance": account_balance(account)}
+        for account in accounts
+    ]
+
+    finance_summary = {
+        "cash": 0,
+        "payables": 0,
+        "receivables": 0,
+        "customer_deposits": 0,
+    }
+
+    for row in account_rows:
+        account = row["account"]
+        balance = int(row["balance"] or 0)
+
+        if account.kind == Account.Kind.CASH:
+            finance_summary["cash"] += balance
+        elif account.kind == Account.Kind.PAYABLE:
+            finance_summary["payables"] += balance
+        elif account.kind == Account.Kind.RECEIVABLE:
+            finance_summary["receivables"] += balance
+        elif account.kind == Account.Kind.CUSTOMER_DEPOSIT:
+            finance_summary["customer_deposits"] += balance
+
+    finance_summary["spendable"] = (
+        finance_summary["cash"]
+        - finance_summary["payables"]
+        - finance_summary["customer_deposits"]
+    )
+
+    businesses = list(
+        Business.objects.filter(active=True).order_by("title")
+    )
+    business_positions = [
+        {
+            "business": business,
+            **business_transfer_position(business),
+        }
+        for business in businesses
+    ]
+
     recent = list(AccountEntry.objects.select_related("account")[:100])
     return render(request, "dia_core/finance.html", {
         "accounts": accounts,
         "account_rows": account_rows,
+        "finance_summary": finance_summary,
+        "businesses": businesses,
+        "business_positions": business_positions,
         "recent": recent,
         "today_j": format_jalali(date.today()),
     })

@@ -362,3 +362,250 @@ class FinanceSettingsSetupTests(TestCase):
 
         self.product.refresh_from_db()
         self.assertEqual(self.product.business, business)
+
+class InterBusinessTransferTests(TestCase):
+    def setUp(self):
+        from dia_core.models import Business, Account
+
+        self.dia = Business.objects.create(
+            code="dia-transfer-test",
+            title="Dia",
+            active=True,
+        )
+        self.holder = Business.objects.create(
+            code="holder-transfer-test",
+            title="Holder",
+            active=True,
+        )
+        self.bodyguard = Business.objects.create(
+            code="bodyguard-transfer-test",
+            title="Bodyguard",
+            active=True,
+        )
+
+        self.bank = Account.objects.create(
+            title="بانک تست انتقال",
+            kind=Account.Kind.CASH,
+            opening_balance=100_000_000,
+            active=True,
+        )
+
+    def test_holder_can_fund_dia_without_changing_total_bank_balance(self):
+        from dia_core.models import BusinessTransfer
+        from dia_core.services import account_balance, business_transfer_position
+
+        before_bank = account_balance(self.bank)
+
+        BusinessTransfer.objects.create(
+            date=date(2026, 9, 17),
+            from_business=self.holder,
+            to_business=self.dia,
+            amount=10_000_000,
+            note="کمک نقدینگی",
+        )
+
+        after_bank = account_balance(self.bank)
+
+        self.assertEqual(before_bank, 100_000_000)
+        self.assertEqual(after_bank, 100_000_000)
+
+        holder = business_transfer_position(self.holder)
+        dia = business_transfer_position(self.dia)
+
+        self.assertEqual(holder["receivable"], 10_000_000)
+        self.assertEqual(holder["payable"], 0)
+        self.assertEqual(holder["net"], 10_000_000)
+
+        self.assertEqual(dia["receivable"], 0)
+        self.assertEqual(dia["payable"], 10_000_000)
+        self.assertEqual(dia["net"], -10_000_000)
+
+    def test_transfer_works_between_any_two_different_businesses(self):
+        from dia_core.models import BusinessTransfer
+
+        row = BusinessTransfer.objects.create(
+            date=date(2026, 9, 17),
+            from_business=self.bodyguard,
+            to_business=self.holder,
+            amount=5_000_000,
+        )
+
+        self.assertEqual(row.from_business, self.bodyguard)
+        self.assertEqual(row.to_business, self.holder)
+        self.assertEqual(row.amount, 5_000_000)
+
+    def test_reverse_transfer_nets_the_internal_balance(self):
+        from dia_core.models import BusinessTransfer
+        from dia_core.services import business_transfer_position
+
+        BusinessTransfer.objects.create(
+            date=date(2026, 9, 17),
+            from_business=self.holder,
+            to_business=self.dia,
+            amount=10_000_000,
+        )
+        BusinessTransfer.objects.create(
+            date=date(2026, 9, 18),
+            from_business=self.dia,
+            to_business=self.holder,
+            amount=10_000_000,
+        )
+
+        holder = business_transfer_position(self.holder)
+        dia = business_transfer_position(self.dia)
+
+        self.assertEqual(holder["receivable"], 0)
+        self.assertEqual(holder["payable"], 0)
+        self.assertEqual(holder["net"], 0)
+
+        self.assertEqual(dia["receivable"], 0)
+        self.assertEqual(dia["payable"], 0)
+        self.assertEqual(dia["net"], 0)
+
+
+class FinanceTransferViewTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from dia_core.models import Business
+
+        self.user = get_user_model().objects.create_user(
+            username="finance-transfer-user",
+            password="test-pass-123",
+        )
+        self.client.force_login(self.user)
+
+        self.dia = Business.objects.create(
+            code="dia-finance-view",
+            title="Dia",
+        )
+        self.holder = Business.objects.create(
+            code="holder-finance-view",
+            title="Holder",
+        )
+
+    def test_finance_can_create_business_transfer(self):
+        from dia_core.models import BusinessTransfer
+
+        response = self.client.post(
+            "/finance/",
+            {
+                "action": "business_transfer",
+                "date": "1405/06/26",
+                "from_business": self.holder.id,
+                "to_business": self.dia.id,
+                "amount": "10000000",
+                "note": "تامین نقدینگی Dia",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        row = BusinessTransfer.objects.get()
+        self.assertEqual(row.from_business, self.holder)
+        self.assertEqual(row.to_business, self.dia)
+        self.assertEqual(row.amount, 10_000_000)
+
+
+class FinanceDashboardTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from dia_core.models import Account, Business, BusinessTransfer
+
+        user = get_user_model().objects.create_user(
+            username="finance-dashboard-user",
+            password="test-pass-123",
+        )
+        self.client.force_login(user)
+
+        self.dia = Business.objects.create(code="dia-dashboard", title="Dia")
+        self.bodyguard = Business.objects.create(code="bodyguard-dashboard", title="Bodyguard")
+        self.holder = Business.objects.create(code="holder-dashboard", title="Holder")
+
+        Account.objects.create(
+            title="بانک داشبورد تست",
+            kind=Account.Kind.CASH,
+            opening_balance=142_918_000,
+        )
+        Account.objects.create(
+            title="بدهی علی داشبورد",
+            kind=Account.Kind.PAYABLE,
+            business=self.dia,
+            opening_balance=64_500_000,
+        )
+        Account.objects.create(
+            title="بدهی آرش داشبورد",
+            kind=Account.Kind.PAYABLE,
+            business=self.bodyguard,
+            opening_balance=87_500_000,
+        )
+        Account.objects.create(
+            title="بدهی مهر داشبورد",
+            kind=Account.Kind.PAYABLE,
+            business=self.holder,
+            opening_balance=102_280_000,
+        )
+        Account.objects.create(
+            title="بیعانه داشبورد",
+            kind=Account.Kind.CUSTOMER_DEPOSIT,
+            business=self.holder,
+            opening_balance=20_000_000,
+        )
+        Account.objects.create(
+            title="طلب داشبورد",
+            kind=Account.Kind.RECEIVABLE,
+            opening_balance=18_000_000,
+        )
+
+        BusinessTransfer.objects.create(
+            date=date(2026, 9, 17),
+            from_business=self.holder,
+            to_business=self.dia,
+            amount=10_000_000,
+        )
+
+    def test_finance_context_has_summary_and_business_positions(self):
+        response = self.client.get("/finance/")
+
+        self.assertEqual(response.status_code, 200)
+
+        summary = response.context["finance_summary"]
+        self.assertEqual(summary["cash"], 142_918_000)
+        self.assertEqual(summary["payables"], 254_280_000)
+        self.assertEqual(summary["customer_deposits"], 20_000_000)
+        self.assertEqual(summary["receivables"], 18_000_000)
+        self.assertEqual(summary["spendable"], -131_362_000)
+
+        positions = {
+            row["business"].code: row
+            for row in response.context["business_positions"]
+        }
+
+        self.assertEqual(positions["holder-dashboard"]["receivable"], 10_000_000)
+        self.assertEqual(positions["holder-dashboard"]["payable"], 0)
+        self.assertEqual(positions["dia-dashboard"]["payable"], 10_000_000)
+
+
+class FinanceTemplateTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from dia_core.models import Business
+
+        user = get_user_model().objects.create_user(
+            username="finance-template-user",
+            password="test-pass-123",
+        )
+        self.client.force_login(user)
+
+        Business.objects.create(code="dia-template", title="Dia")
+        Business.objects.create(code="holder-template", title="Holder")
+        Business.objects.create(code="bodyguard-template", title="Bodyguard")
+
+    def test_finance_page_shows_summary_and_transfer_form(self):
+        response = self.client.get("/finance/")
+
+        self.assertContains(response, "پول قابل خرج")
+        self.assertContains(response, "انتقال بین بیزنس‌ها")
+        self.assertContains(response, 'name="from_business"')
+        self.assertContains(response, 'name="to_business"')
+        self.assertContains(response, "طلب از بیزنس‌ها")
+        self.assertContains(response, "بدهی به بیزنس‌ها")

@@ -508,3 +508,43 @@ class AppSetting(models.Model):
 
     def __str__(self):
         return self.label
+
+
+class BusinessTransfer(models.Model):
+    date = models.DateField(db_index=True)
+    from_business = models.ForeignKey(
+        Business,
+        on_delete=models.PROTECT,
+        related_name="outgoing_business_transfers",
+    )
+    to_business = models.ForeignKey(
+        Business,
+        on_delete=models.PROTECT,
+        related_name="incoming_business_transfers",
+    )
+    amount = models.PositiveBigIntegerField(
+        validators=[MinValueValidator(1)]
+    )
+    note = models.CharField(max_length=250, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date", "-id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(
+                    from_business=models.F("to_business")
+                ),
+                name="dia_transfer_different_businesses",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=0),
+                name="dia_transfer_positive_amount",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.from_business} -> "
+            f"{self.to_business}: {self.amount}"
+        )

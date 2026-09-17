@@ -7,6 +7,7 @@ from .models import (
     Account,
     AccountEntry,
     AppSetting,
+    BusinessTransfer,
     InventoryMovement,
     ProductVariant,
     PurchaseLine,
@@ -289,3 +290,26 @@ def create_account_entry(*, account, date, delta, title, reference="", note=""):
         reference=reference,
         note=note or "",
     )
+
+
+def business_transfer_position(business):
+    given = (
+        BusinessTransfer.objects
+        .filter(from_business=business)
+        .aggregate(v=Sum("amount"))["v"]
+        or 0
+    )
+    received = (
+        BusinessTransfer.objects
+        .filter(to_business=business)
+        .aggregate(v=Sum("amount"))["v"]
+        or 0
+    )
+
+    net = int(given) - int(received)
+
+    return {
+        "receivable": max(net, 0),
+        "payable": max(-net, 0),
+        "net": net,
+    }

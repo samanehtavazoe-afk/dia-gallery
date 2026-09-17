@@ -1,5 +1,140 @@
 {% extends 'dia_core/base.html' %}{% load dia_tags %}{% block title %}مالی | Dia Gallery{% endblock %}{% block content %}
 <div class="mb-4"><div class="page-kicker">مالی</div><h1 class="page-title mb-1">پرداخت‌ها و دریافت‌ها</h1><div class="text-secondary">حساب‌ها کاملاً مستقل‌اند و هیچ حسابی از پنل دیگر از قبل ساخته نمی‌شود.</div></div>
+
+<div class="row g-2 mb-4">
+  <div class="col-6 col-lg">
+    <div class="card"><div class="card-body">
+      <div class="text-secondary small">موجودی بانک</div>
+      <strong class="fs-4 money">{{ finance_summary.cash|groupnum }}</strong>
+      <div class="text-secondary small">تومان</div>
+    </div></div>
+  </div>
+
+  <div class="col-6 col-lg">
+    <div class="card"><div class="card-body">
+      <div class="text-secondary small">بدهی‌ها</div>
+      <strong class="fs-4 money">{{ finance_summary.payables|groupnum }}</strong>
+      <div class="text-secondary small">تومان</div>
+    </div></div>
+  </div>
+
+  <div class="col-6 col-lg">
+    <div class="card"><div class="card-body">
+      <div class="text-secondary small">بیعانه مشتری</div>
+      <strong class="fs-4 money">{{ finance_summary.customer_deposits|groupnum }}</strong>
+      <div class="text-secondary small">تومان</div>
+    </div></div>
+  </div>
+
+  <div class="col-6 col-lg">
+    <div class="card"><div class="card-body">
+      <div class="text-secondary small">طلب‌ها</div>
+      <strong class="fs-4 money">{{ finance_summary.receivables|groupnum }}</strong>
+      <div class="text-secondary small">تومان</div>
+    </div></div>
+  </div>
+
+  <div class="col-12 col-lg">
+    <div class="card"><div class="card-body">
+      <div class="text-secondary small">پول قابل خرج</div>
+      <strong class="fs-4 money {% if finance_summary.spendable < 0 %}text-danger{% else %}text-success{% endif %}">
+        {{ finance_summary.spendable|groupnum }}
+      </strong>
+      <div class="text-secondary small">تومان</div>
+    </div></div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header">
+        <h3 class="card-title mb-0">انتقال بین بیزنس‌ها</h3>
+      </div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="business_transfer">
+
+          <div class="mb-2">
+            <label class="form-label">تاریخ</label>
+            <input class="form-control" name="date" value="{{ today_j }}" required>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label">از بیزنس</label>
+            <select class="form-select" name="from_business" required>
+              <option value="">انتخاب کن</option>
+              {% for business in businesses %}
+                <option value="{{ business.id }}">{{ business.title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label">به بیزنس</label>
+            <select class="form-select" name="to_business" required>
+              <option value="">انتخاب کن</option>
+              {% for business in businesses %}
+                <option value="{{ business.id }}">{{ business.title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label">مبلغ</label>
+            <input class="form-control money" type="number" min="1" name="amount" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">توضیح</label>
+            <input class="form-control" name="note" placeholder="مثلاً تامین نقدینگی Dia">
+          </div>
+
+          <button class="btn btn-primary w-100">ثبت انتقال</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header">
+        <h3 class="card-title mb-0">مانده بین بیزنس‌ها</h3>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table mb-0">
+          <thead>
+            <tr>
+              <th>بیزنس</th>
+              <th>طلب از بیزنس‌ها</th>
+              <th>بدهی به بیزنس‌ها</th>
+              <th>خالص</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in business_positions %}
+              <tr>
+                <td>{{ row.business.title }}</td>
+                <td class="money text-success">{{ row.receivable|groupnum }}</td>
+                <td class="money text-danger">{{ row.payable|groupnum }}</td>
+                <td class="money">{{ row.net|groupnum }}</td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="4" class="text-center text-secondary py-4">
+                  بیزنسی تعریف نشده.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="row g-2 mb-4">{% for row in account_rows %}<div class="col-6 col-lg-3"><div class="card"><div class="card-body"><div class="text-secondary small">{{ row.account.title }}</div><strong class="fs-3 money {% if row.balance < 0 %}text-danger{% endif %}">{{ row.balance|groupnum }}</strong><div class="text-secondary small">تومان</div></div></div></div>{% empty %}<div class="col-12"><div class="alert alert-info">هنوز حساب مالی تعریف نشده.</div></div>{% endfor %}</div>
 <div class="row g-3 mb-4"><div class="col-lg-4"><div class="card h-100"><div class="card-header"><h3 class="card-title mb-0">تعریف حساب</h3></div><div class="card-body"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="add_account"><div class="mb-3"><label class="form-label">نام حساب</label><input class="form-control" name="title" required placeholder="مثلاً حساب بانکی"></div><div class="mb-3"><label class="form-label">مانده شروع</label><input class="form-control money" type="number" name="opening_balance" value="0"></div><button class="btn btn-primary w-100">اضافه کردن</button></form></div></div></div>
 <div class="col-lg-4"><div class="card h-100"><div class="card-header"><h3 class="card-title mb-0">پرداخت</h3></div><div class="card-body"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="payment"><div class="mb-2"><input class="form-control" name="date" value="{{ today_j }}"></div><div class="mb-2"><select class="form-select" name="account" required><option value="">حساب مبدا</option>{% for a in accounts %}<option value="{{ a.id }}">{{ a.title }}</option>{% endfor %}</select></div><div class="mb-2"><input class="form-control money" type="number" min="1" name="amount" placeholder="مبلغ" required></div><div class="mb-2"><input class="form-control" name="title" placeholder="عنوان پرداخت"></div><div class="mb-3"><input class="form-control" name="note" placeholder="یادداشت"></div><button class="btn btn-primary w-100">ثبت پرداخت</button></form></div></div></div>
