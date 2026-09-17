@@ -459,3 +459,53 @@ def settle_counterparty_receivable(
     )
 
     return account
+
+def platform_receivable_totals():
+    totals = {
+        "digikala": 0,
+        "basalam": 0,
+        "snapp": 0,
+        "digipay": 0,
+        "torobpay": 0,
+    }
+
+    orders = (
+        SaleOrder.objects
+        .filter(payment_status=SaleOrder.PaymentStatus.PENDING)
+        .select_related("sales_channel", "payment_provider")
+        .prefetch_related("lines")
+    )
+
+    for order in orders:
+        channel_code = (order.sales_channel.code or "").strip().lower()
+        provider_code = (
+            (order.payment_provider.code or "").strip().lower()
+            if order.payment_provider
+            else ""
+        )
+
+        if channel_code in {"digikala", "basalam"}:
+            bucket = channel_code
+        elif provider_code in {"snapp", "digipay", "torobpay"}:
+            bucket = provider_code
+        else:
+            continue
+
+        amount = (
+            int(order.shipping_collected or 0)
+            + int(order.provider_fee_collected or 0)
+        )
+
+        for line in order.lines.all():
+            qty = int(line.quantity or 0)
+
+            amount += qty * int(line.sale_price or 0)
+            amount -= qty * int(line.digikala_fee_unit or 0)
+            amount -= qty * int(line.channel_fee_unit_snapshot or 0)
+            amount -= qty * int(line.channel_tax_unit_snapshot or 0)
+            amount -= qty * int(line.provider_fee_unit_snapshot or 0)
+            amount -= qty * int(line.provider_tax_unit_snapshot or 0)
+
+        totals[bucket] += amount
+
+    return totals

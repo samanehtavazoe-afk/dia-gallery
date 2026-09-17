@@ -45,6 +45,23 @@
   </div>
 </div>
 
+<div class="card mb-4">
+  <div class="card-header">
+    <h3 class="card-title mb-0">طلب از پلتفرم‌ها</h3>
+  </div>
+  <div class="table-responsive">
+    <table class="table mb-0">
+      <tbody>
+        <tr><td>دیجی‌کالا</td><td class="money">{{ platform_receivables.digikala|groupnum }}</td></tr>
+        <tr><td>باسلام</td><td class="money">{{ platform_receivables.basalam|groupnum }}</td></tr>
+        <tr><td>SnappPay</td><td class="money">{{ platform_receivables.snapp|groupnum }}</td></tr>
+        <tr><td>DigiPay</td><td class="money">{{ platform_receivables.digipay|groupnum }}</td></tr>
+        <tr><td>TorobPay</td><td class="money">{{ platform_receivables.torobpay|groupnum }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
 <div class="row g-3 mb-4">
   <div class="col-lg-5">
     <div class="card h-100">
