@@ -14,6 +14,7 @@ from .models import (
     AccountEntry,
     Business,
     BusinessTransfer,
+    Counterparty,
     AppSetting,
     Color,
     InventoryMovement,
@@ -36,6 +37,7 @@ from .models import (
 from .services import (
     account_balance,
     business_transfer_position,
+    counterparty_position,
     create_account_entry,
     create_adjustment,
     create_return,
@@ -931,8 +933,67 @@ def finance(request):
             title = (request.POST.get("title") or "").strip()
             if not title:
                 raise ValueError("نام حساب را وارد کن.")
-            Account.objects.get_or_create(title=title, defaults={"opening_balance": _int(request.POST.get("opening_balance"))})
+
+            kind = (request.POST.get("kind") or Account.Kind.GENERIC).strip()
+            valid_kinds = {value for value, _label in Account.Kind.choices}
+            if kind not in valid_kinds:
+                raise ValueError("نوع حساب نامعتبر است.")
+
+            business = None
+            business_id = request.POST.get("business")
+            if business_id:
+                business = get_object_or_404(
+                    Business,
+                    id=business_id,
+                    active=True,
+                )
+
+            counterparty = None
+            counterparty_id = request.POST.get("counterparty")
+            if counterparty_id:
+                counterparty = get_object_or_404(
+                    Counterparty,
+                    id=counterparty_id,
+                    active=True,
+                )
+                if business is None:
+                    business = counterparty.business
+                elif counterparty.business_id != business.id:
+                    raise ValueError("طرف حساب متعلق به این بیزنس نیست.")
+
+            Account.objects.get_or_create(
+                title=title,
+                defaults={
+                    "kind": kind,
+                    "business": business,
+                    "counterparty": counterparty,
+                    "opening_balance": _int(
+                        request.POST.get("opening_balance")
+                    ),
+                },
+            )
             messages.success(request, "حساب اضافه شد.")
+
+        elif action == "add_counterparty":
+            title = (request.POST.get("title") or "").strip()
+            if not title:
+                raise ValueError("نام طرف حساب را وارد کن.")
+
+            business = get_object_or_404(
+                Business,
+                id=request.POST.get("business"),
+                active=True,
+            )
+
+            Counterparty.objects.get_or_create(
+                title=title,
+                business=business,
+                defaults={
+                    "note": (request.POST.get("note") or "").strip()[:250],
+                    "active": True,
+                },
+            )
+            messages.success(request, "طرف حساب اضافه شد.")
 
         elif action == "business_transfer":
             from_business = get_object_or_404(
@@ -1031,6 +1092,20 @@ def finance(request):
         for business in businesses
     ]
 
+    counterparties = list(
+        Counterparty.objects.filter(active=True)
+        .select_related("business")
+        .order_by("business__title", "title")
+    )
+
+    counterparty_positions = [
+        {
+            "counterparty": counterparty,
+            **counterparty_position(counterparty),
+        }
+        for counterparty in counterparties
+    ]
+
     recent = list(AccountEntry.objects.select_related("account")[:100])
     return render(request, "dia_core/finance.html", {
         "accounts": accounts,
@@ -1038,6 +1113,8 @@ def finance(request):
         "finance_summary": finance_summary,
         "businesses": businesses,
         "business_positions": business_positions,
+        "counterparties": counterparties,
+        "counterparty_positions": counterparty_positions,
         "recent": recent,
         "today_j": format_jalali(date.today()),
     })

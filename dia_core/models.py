@@ -428,6 +428,30 @@ class PlatformSettlement(models.Model):
         ordering = ["-expected_settlement_date", "-id"]
 
 
+
+class Counterparty(models.Model):
+    title = models.CharField(max_length=120)
+    business = models.ForeignKey(
+        Business,
+        on_delete=models.PROTECT,
+        related_name="counterparties",
+    )
+    active = models.BooleanField(default=True)
+    note = models.CharField(max_length=250, blank=True)
+
+    class Meta:
+        ordering = ["business__title", "title"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["business", "title"],
+                name="uniq_dia_counterparty_business_title",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.title} / {self.business}"
+
+
 class Account(models.Model):
     class Kind(models.TextChoices):
         GENERIC = "generic", "عمومی"
@@ -445,6 +469,13 @@ class Account(models.Model):
     )
     business = models.ForeignKey(
         Business,
+        on_delete=models.PROTECT,
+        related_name="accounts",
+        null=True,
+        blank=True,
+    )
+    counterparty = models.ForeignKey(
+        Counterparty,
         on_delete=models.PROTECT,
         related_name="accounts",
         null=True,

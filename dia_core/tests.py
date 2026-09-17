@@ -609,3 +609,150 @@ class FinanceTemplateTests(TestCase):
         self.assertContains(response, 'name="to_business"')
         self.assertContains(response, "طلب از بیزنس‌ها")
         self.assertContains(response, "بدهی به بیزنس‌ها")
+
+
+class CounterpartyFinanceTests(TestCase):
+    def setUp(self):
+        from dia_core.models import Business
+
+        self.holder = Business.objects.create(
+            code="holder-counterparty-test",
+            title="Holder",
+        )
+
+    def test_same_counterparty_can_have_payable_and_receivable(self):
+        from dia_core.models import Account, Counterparty
+        from dia_core.services import counterparty_position
+
+        mehr = Counterparty.objects.create(
+            title="مهر",
+            business=self.holder,
+        )
+
+        Account.objects.create(
+            title="بدهی تست به مهر",
+            kind=Account.Kind.PAYABLE,
+            business=self.holder,
+            counterparty=mehr,
+            opening_balance=100_000_000,
+        )
+
+        Account.objects.create(
+            title="طلب تست از مهر",
+            kind=Account.Kind.RECEIVABLE,
+            business=self.holder,
+            counterparty=mehr,
+            opening_balance=25_000_000,
+        )
+
+        position = counterparty_position(mehr)
+
+        self.assertEqual(position["payable"], 100_000_000)
+        self.assertEqual(position["receivable"], 25_000_000)
+        self.assertEqual(position["net"], -75_000_000)
+
+
+class FinanceCounterpartyViewTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from dia_core.models import Business
+
+        user = get_user_model().objects.create_user(
+            username="counterparty-view-user",
+            password="test-pass-123",
+        )
+        self.client.force_login(user)
+
+        self.holder = Business.objects.create(
+            code="holder-counterparty-view",
+            title="Holder",
+        )
+
+    def test_finance_can_create_counterparty_and_link_account(self):
+        from dia_core.models import Account, Counterparty
+
+        response = self.client.post(
+            "/finance/",
+            {
+                "action": "add_counterparty",
+                "title": "مهر",
+                "business": self.holder.id,
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        mehr = Counterparty.objects.get(
+            title="مهر",
+            business=self.holder,
+        )
+
+        response = self.client.post(
+            "/finance/",
+            {
+                "action": "add_account",
+                "title": "طلب از مهر",
+                "kind": Account.Kind.RECEIVABLE,
+                "business": self.holder.id,
+                "counterparty": mehr.id,
+                "opening_balance": "25000000",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        account = Account.objects.get(title="طلب از مهر")
+        self.assertEqual(account.kind, Account.Kind.RECEIVABLE)
+        self.assertEqual(account.business, self.holder)
+        self.assertEqual(account.counterparty, mehr)
+        self.assertEqual(account.opening_balance, 25_000_000)
+
+
+class FinanceCounterpartyTemplateTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from dia_core.models import Account, Business, Counterparty
+
+        user = get_user_model().objects.create_user(
+            username="counterparty-template-user",
+            password="test-pass-123",
+        )
+        self.client.force_login(user)
+
+        holder = Business.objects.create(
+            code="holder-counterparty-template",
+            title="Holder",
+        )
+        mehr = Counterparty.objects.create(
+            title="مهر",
+            business=holder,
+        )
+
+        Account.objects.create(
+            title="بدهی به مهر تست صفحه",
+            kind=Account.Kind.PAYABLE,
+            business=holder,
+            counterparty=mehr,
+            opening_balance=100_000_000,
+        )
+        Account.objects.create(
+            title="طلب از مهر تست صفحه",
+            kind=Account.Kind.RECEIVABLE,
+            business=holder,
+            counterparty=mehr,
+            opening_balance=25_000_000,
+        )
+
+    def test_finance_page_shows_counterparty_forms_and_position(self):
+        response = self.client.get("/finance/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "طرف حساب")
+        self.assertContains(response, 'name="kind"')
+        self.assertContains(response, 'name="business"')
+        self.assertContains(response, 'name="counterparty"')
+
+        positions = response.context["counterparty_positions"]
+        self.assertEqual(len(positions), 1)
+        self.assertEqual(positions[0]["counterparty"].title, "مهر")
+        self.assertEqual(positions[0]["payable"], 100_000_000)
+        self.assertEqual(positions[0]["receivable"], 25_000_000)
+        self.assertEqual(positions[0]["net"], -75_000_000)

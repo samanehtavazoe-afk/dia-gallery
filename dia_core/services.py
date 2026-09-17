@@ -313,3 +313,22 @@ def business_transfer_position(business):
         "payable": max(-net, 0),
         "net": net,
     }
+
+
+def counterparty_position(counterparty):
+    payable = 0
+    receivable = 0
+
+    for account in counterparty.accounts.filter(active=True):
+        balance = account_balance(account)
+
+        if account.kind == Account.Kind.PAYABLE:
+            payable += balance
+        elif account.kind == Account.Kind.RECEIVABLE:
+            receivable += balance
+
+    return {
+        "payable": payable,
+        "receivable": receivable,
+        "net": receivable - payable,
+    }
