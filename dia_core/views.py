@@ -247,6 +247,13 @@ def sale_day(request, day_id):
     businesses = list(Business.objects.filter(active=True).order_by("title"))
     channels = list(SalesChannel.objects.filter(active=True).order_by("title"))
     providers = list(PaymentProvider.objects.filter(active=True).order_by("title"))
+    if mode == "site":
+        providers = [
+            row for row in providers
+            if (row.code or "").strip().lower() in {"snapp", "digipay", "torobpay"}
+        ]
+    elif mode in {"digikala", "basalam", "holder"}:
+        providers = []
 
     orders_qs = (
         SaleOrder.objects
@@ -317,6 +324,18 @@ def sale_day(request, day_id):
             selected_business = businesses[0]
         if selected_channel is None and channels:
             selected_channel = channels[0]
+
+    if mode in {"digikala", "basalam", "site"}:
+        selected_channel = next(
+            (
+                row for row in channels
+                if (row.code or "").strip().lower() == mode
+            ),
+            None,
+        )
+
+    if mode in {"digikala", "basalam", "holder"}:
+        selected_provider = None
 
     variants_qs = ProductVariant.objects.filter(
         active=True,

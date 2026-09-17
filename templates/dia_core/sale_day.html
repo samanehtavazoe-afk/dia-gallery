@@ -60,6 +60,17 @@
     </a>
   </div>
 </div>
+{% elif mode == "holder" %}
+
+<div class="card mb-4">
+  <div class="card-body py-5 text-center">
+    <h3 class="card-title mb-2">فروش قالب</h3>
+    <div class="text-secondary">
+      فرم اختصاصی فروش هولدر در این بخش ثبت می‌شود.
+    </div>
+  </div>
+</div>
+
 {% else %}
 
 <div class="row g-2 mb-4">
@@ -168,6 +179,7 @@
           </select>
         </div>
 
+        {% if mode == "site" %}
         <div class="col-md-4">
           <label class="form-label">روش پرداخت</label>
           <select class="form-select" name="payment_provider">
@@ -182,6 +194,7 @@
             {% endfor %}
           </select>
         </div>
+        {% endif %}
 
         <div class="col-md-4">
           <label class="form-label">وضعیت پول</label>
