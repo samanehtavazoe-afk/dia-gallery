@@ -8,6 +8,40 @@ Do not use this file for every tiny cosmetic edit; record changes that a future 
 
 ---
 
+## 2026-09-17 — Multi-business finance and sales orders
+
+Added:
+
+- Business model for separate operational tracking
+- sales channels and payment providers
+- order-level sales model (`SaleOrder`)
+- multi-line invoices linked to inventory-safe `SaleLine` records
+- payment and settlement status tracking
+- shipping collected vs actual shipping cost
+- payment-provider fee snapshots
+- platform settlement model
+- business expense model
+- account kinds for cash, payable, receivable and customer deposits
+- per-channel variant sale prices
+- sales UI for invoices with multiple products
+- settings UI for channel-specific prices
+
+Important accounting behavior:
+
+- inventory still uses delta-safe synchronization
+- historical unit cost and fee snapshots remain frozen on sale lines
+- shipping is stored once per order, not once per product line
+- channel-specific sale price falls back to the variant default price
+- real business data is not seeded into a fresh database
+
+Verification:
+
+- migration applied successfully on an isolated PostgreSQL test database
+- migration drift check returned `No changes detected`
+- full Django test suite: 9 tests passing
+
+---
+
 ## 2026-09-14 — Complete AI handoff documentation
 
 Baseline before documentation:

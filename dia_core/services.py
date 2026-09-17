@@ -54,6 +54,71 @@ def digikala_fee_for_unit(sale_price):
     return _round_toman(commission + processing + vat)
 
 
+def _setting_text(key, default=""):
+    raw = AppSetting.objects.filter(key=key).values_list("value", flat=True).first()
+    return str(default if raw in (None, "") else raw).strip().lower()
+
+
+def percent_fee_for_unit(sale_price, percent):
+    price = Decimal(sale_price or 0)
+    rate = Decimal(str(percent or 0)) / Decimal(100)
+    return _round_toman(price * rate)
+
+
+def sale_cost_snapshots(*, sale_price, variant, sales_channel=None, payment_provider=None):
+    digikala_fee = 0
+    channel_fee = 0
+    channel_tax = 0
+    provider_fee = 0
+    provider_tax = 0
+
+    channel_code = getattr(sales_channel, "code", "") or ""
+    provider_code = getattr(payment_provider, "code", "") or ""
+
+    if channel_code == "digikala":
+        digikala_fee = digikala_fee_for_unit(sale_price)
+
+    elif channel_code == "basalam":
+        business = getattr(variant.product, "business", None)
+        if business is None:
+            raise ValueError("برای محاسبه کارمزد باسلام، بیزنس محصول باید مشخص باشد.")
+
+        if business.code == "holder":
+            rate = _setting_decimal("basalam_holder_commission_percent", Decimal("10.5"))
+        else:
+            rate = _setting_decimal("basalam_underwear_commission_percent", Decimal("14"))
+
+        channel_fee = percent_fee_for_unit(sale_price, rate)
+
+    if provider_code == "snapp":
+        rate = _setting_decimal("snapp_commission_percent", Decimal("13"))
+        tax_rate = _setting_decimal("snapp_tax_percent", Decimal("10"))
+        provider_fee = percent_fee_for_unit(sale_price, rate)
+
+        tax_base = _setting_text("snapp_tax_base", "")
+        if tax_base == "fee":
+            provider_tax = percent_fee_for_unit(provider_fee, tax_rate)
+        elif tax_base == "gross":
+            provider_tax = percent_fee_for_unit(sale_price, tax_rate)
+
+    elif provider_code == "digipay":
+        rate = _setting_decimal("digipay_commission_percent", Decimal("12"))
+        provider_fee = percent_fee_for_unit(sale_price, rate)
+
+    elif provider_code == "torobpay":
+        rate = _setting_decimal("torobpay_commission_percent", Decimal("6"))
+        provider_fee = percent_fee_for_unit(sale_price, rate)
+
+    return {
+        "digikala_fee_unit": digikala_fee,
+        "channel_fee_unit_snapshot": channel_fee,
+        "channel_tax_unit_snapshot": channel_tax,
+        "provider_fee_unit_snapshot": provider_fee,
+        "provider_tax_unit_snapshot": provider_tax,
+    }
+
+
+
 def main_location():
     return StockLocation.objects.get(key="main")
 
@@ -73,12 +138,32 @@ def stock_for(variant, location=None, *, lock=False):
 def sale_metrics(line):
     qty = int(line.quantity or 0)
     gross = qty * int(line.sale_price or 0)
-    fee = qty * int(line.digikala_fee_unit or 0)
+
+    digikala_fee = qty * int(line.digikala_fee_unit or 0)
+    channel_fee = qty * int(line.channel_fee_unit_snapshot or 0)
+    channel_tax = qty * int(line.channel_tax_unit_snapshot or 0)
+    provider_fee = qty * int(line.provider_fee_unit_snapshot or 0)
+    provider_tax = qty * int(line.provider_tax_unit_snapshot or 0)
     cogs = qty * int(line.unit_cost_snapshot or 0)
-    profit = gross - fee - cogs
+
+    total_fees = (
+        digikala_fee
+        + channel_fee
+        + channel_tax
+        + provider_fee
+        + provider_tax
+    )
+
+    profit = gross - total_fees - cogs
+
     return {
         "gross": gross,
-        "digikala_fee": fee,
+        "digikala_fee": digikala_fee,
+        "channel_fee": channel_fee,
+        "channel_tax": channel_tax,
+        "provider_fee": provider_fee,
+        "provider_tax": provider_tax,
+        "total_fees": total_fees,
         "cogs": cogs,
         "profit": profit,
         "quantity": qty,

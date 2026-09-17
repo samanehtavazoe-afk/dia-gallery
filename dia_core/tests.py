@@ -82,3 +82,198 @@ class DiaStockSyncTests(TestCase):
         sync_sale_inventory(line)
         self.balance.refresh_from_db()
         self.assertEqual(self.balance.qty, 9)
+
+from django.test import TestCase
+from django.utils import timezone
+
+from dia_core.models import (
+    Business,
+    Color,
+    Product,
+    ProductVariant,
+    SaleDay,
+    SaleLine,
+    SaleOrder,
+    SalesChannel,
+    Size,
+    StockLocation,
+    VariantChannelPrice,
+)
+from dia_core.services import (
+    sale_metrics,
+    stock_for,
+    sync_sale_inventory,
+)
+
+
+class FinanceSaleOrderTests(TestCase):
+    def setUp(self):
+        self.location = StockLocation.objects.create(
+            key="main",
+            title="Main",
+            active=True,
+        )
+
+        self.business = Business.objects.create(
+            code="test-business",
+            title="Test Business",
+            active=True,
+        )
+        self.channel = SalesChannel.objects.create(
+            code="site",
+            title="Site",
+            active=True,
+        )
+        self.size = Size.objects.create(
+            name="L",
+            sort_order=1,
+        )
+        self.color = Color.objects.create(
+            name="Black",
+        )
+
+        self.product1 = Product.objects.create(
+            code="P1",
+            title="Product 1",
+            business=self.business,
+        )
+        self.product2 = Product.objects.create(
+            code="P2",
+            title="Product 2",
+            business=self.business,
+        )
+
+        self.variant1 = ProductVariant.objects.create(
+            product=self.product1,
+            size=self.size,
+            color=self.color,
+            default_sale_price=100000,
+            unit_cost=40000,
+        )
+        self.variant2 = ProductVariant.objects.create(
+            product=self.product2,
+            size=self.size,
+            color=self.color,
+            default_sale_price=200000,
+            unit_cost=80000,
+        )
+
+        VariantChannelPrice.objects.create(
+            variant=self.variant1,
+            sales_channel=self.channel,
+            sale_price=125000,
+        )
+
+        self.day = SaleDay.objects.create(
+            date=timezone.localdate(),
+        )
+
+        self.order = SaleOrder.objects.create(
+            day=self.day,
+            business=self.business,
+            sales_channel=self.channel,
+            payment_status=SaleOrder.PaymentStatus.RECEIVED,
+            shipping_collected=160000,
+            shipping_cost=120000,
+        )
+
+    def test_channel_price_exists_and_default_fallback_is_possible(self):
+        channel_price = VariantChannelPrice.objects.get(
+            variant=self.variant1,
+            sales_channel=self.channel,
+        )
+
+        self.assertEqual(channel_price.sale_price, 125000)
+        self.assertEqual(self.variant2.default_sale_price, 200000)
+
+    def test_multi_line_order_updates_inventory_by_delta(self):
+        stock1 = stock_for(self.variant1)
+        stock2 = stock_for(self.variant2)
+
+        stock1.qty = 10
+        stock1.save(update_fields=["qty"])
+
+        stock2.qty = 20
+        stock2.save(update_fields=["qty"])
+
+        line1 = SaleLine.objects.create(
+            day=self.day,
+            order=self.order,
+            variant=self.variant1,
+            business=self.business,
+            sales_channel=self.channel,
+            quantity=2,
+            sale_price=125000,
+            unit_cost_snapshot=40000,
+        )
+        line2 = SaleLine.objects.create(
+            day=self.day,
+            order=self.order,
+            variant=self.variant2,
+            business=self.business,
+            sales_channel=self.channel,
+            quantity=3,
+            sale_price=200000,
+            unit_cost_snapshot=80000,
+        )
+
+        sync_sale_inventory(line1)
+        sync_sale_inventory(line2)
+
+        stock1.refresh_from_db()
+        stock2.refresh_from_db()
+
+        self.assertEqual(stock1.qty, 8)
+        self.assertEqual(stock2.qty, 17)
+
+        line1.quantity = 5
+        line1.save(update_fields=["quantity"])
+        sync_sale_inventory(line1)
+
+        stock1.refresh_from_db()
+        line1.refresh_from_db()
+
+        self.assertEqual(stock1.qty, 5)
+        self.assertEqual(line1.inventory_applied_quantity, 5)
+
+    def test_shipping_is_order_level_not_line_level(self):
+        line1 = SaleLine.objects.create(
+            day=self.day,
+            order=self.order,
+            variant=self.variant1,
+            business=self.business,
+            sales_channel=self.channel,
+            quantity=1,
+            sale_price=125000,
+            unit_cost_snapshot=40000,
+        )
+        line2 = SaleLine.objects.create(
+            day=self.day,
+            order=self.order,
+            variant=self.variant2,
+            business=self.business,
+            sales_channel=self.channel,
+            quantity=1,
+            sale_price=200000,
+            unit_cost_snapshot=80000,
+        )
+
+        metrics1 = sale_metrics(line1)
+        metrics2 = sale_metrics(line2)
+
+        gross = metrics1["gross"] + metrics2["gross"]
+        cogs = metrics1["cogs"] + metrics2["cogs"]
+
+        profit = (
+            gross
+            + self.order.shipping_collected
+            - self.order.shipping_cost
+            - cogs
+        )
+
+        self.assertEqual(gross, 325000)
+        self.assertEqual(cogs, 120000)
+        self.assertEqual(profit, 245000)
+
+        self.assertFalse(hasattr(line1, "shipping_cost_snapshot"))
+        self.assertFalse(hasattr(line2, "shipping_cost_snapshot"))

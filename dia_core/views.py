@@ -12,6 +12,7 @@ from .dateutils import format_jalali, jalali_month_bounds, month_calendar, parse
 from .models import (
     Account,
     AccountEntry,
+    Business,
     AppSetting,
     Color,
     InventoryMovement,
@@ -23,6 +24,10 @@ from .models import (
     ReturnRecord,
     SaleDay,
     SaleLine,
+    SaleOrder,
+    SalesChannel,
+    VariantChannelPrice,
+    PaymentProvider,
     Size,
     StockBalance,
     StockLocation,
@@ -34,6 +39,7 @@ from .services import (
     create_return,
     digikala_fee_for_unit,
     main_location,
+    sale_cost_snapshots,
     sale_metrics,
     stock_for,
     sync_purchase_inventory,
@@ -51,16 +57,77 @@ def _int(value, default=0):
 
 
 def _empty_metrics():
-    return {"gross": 0, "digikala_fee": 0, "cogs": 0, "profit": 0, "quantity": 0, "margin": 0}
+    return {
+        "gross": 0,
+        "digikala_fee": 0,
+        "channel_fee": 0,
+        "channel_tax": 0,
+        "provider_fee": 0,
+        "provider_tax": 0,
+        "shipping_cost": 0,
+        "shipping_collected": 0,
+        "provider_fee_collected": 0,
+        "customer_total": 0,
+        "total_fees": 0,
+        "cogs": 0,
+        "profit": 0,
+        "quantity": 0,
+        "margin": 0,
+    }
 
 
 def _sum_lines(lines):
     total = _empty_metrics()
+    seen_orders = set()
+
     for line in lines:
         row = sale_metrics(line)
-        for key in ("gross", "digikala_fee", "cogs", "profit", "quantity"):
+
+        for key in (
+            "gross",
+            "digikala_fee",
+            "channel_fee",
+            "channel_tax",
+            "provider_fee",
+            "provider_tax",
+            "total_fees",
+            "cogs",
+            "profit",
+            "quantity",
+        ):
             total[key] += row[key]
-    total["margin"] = total["profit"] * 100 / total["gross"] if total["gross"] else 0
+
+        if line.order_id and line.order_id not in seen_orders:
+            seen_orders.add(line.order_id)
+            order = line.order
+
+            shipping_cost = int(order.shipping_cost or 0)
+            shipping_collected = int(order.shipping_collected or 0)
+            provider_collected = int(order.provider_fee_collected or 0)
+
+            total["shipping_cost"] += shipping_cost
+            total["shipping_collected"] += shipping_collected
+            total["provider_fee_collected"] += provider_collected
+            total["total_fees"] += shipping_cost
+
+            total["profit"] += (
+                shipping_collected
+                + provider_collected
+                - shipping_cost
+            )
+
+    total["customer_total"] = (
+        total["gross"]
+        + total["shipping_collected"]
+        + total["provider_fee_collected"]
+    )
+
+    total["margin"] = (
+        total["profit"] * 100 / total["gross"]
+        if total["gross"]
+        else 0
+    )
+
     return total
 
 
@@ -160,71 +227,502 @@ def select_sale_day(request, jy, jm, jd):
 @transaction.atomic
 def sale_day(request, day_id):
     day = get_object_or_404(SaleDay, id=day_id)
-    variants = list(
-        ProductVariant.objects.filter(active=True, product__active=True, size__active=True, color__active=True)
-        .select_related("product", "size", "color")
-        .order_by("product__code", "size__sort_order", "color__name")
+
+    businesses = list(Business.objects.filter(active=True).order_by("title"))
+    channels = list(SalesChannel.objects.filter(active=True).order_by("title"))
+    providers = list(PaymentProvider.objects.filter(active=True).order_by("title"))
+
+    orders_qs = (
+        SaleOrder.objects
+        .filter(day=day)
+        .select_related("business", "sales_channel", "payment_provider")
+        .prefetch_related("lines")
+        .order_by("-id")
     )
-    existing = {row.variant_id: row for row in day.lines.select_for_update().all()} if request.method == "POST" else {
-        row.variant_id: row for row in day.lines.all()
-    }
+    orders = list(orders_qs)
+
+    order_id = _int(
+        request.POST.get("order_id")
+        if request.method == "POST"
+        else request.GET.get("order")
+    )
+
+    selected_order = None
+    if order_id:
+        order_qs = SaleOrder.objects.filter(day=day)
+        if request.method == "POST":
+            order_qs = order_qs.select_for_update()
+
+        selected_order = get_object_or_404(
+            order_qs.select_related(
+                "business",
+                "sales_channel",
+                "payment_provider",
+            ),
+            id=order_id,
+        )
+
+    business_id = _int(
+        request.POST.get("business")
+        if request.method == "POST"
+        else request.GET.get("business"),
+        selected_order.business_id if selected_order else 0,
+    )
+
+    channel_id = _int(
+        request.POST.get("sales_channel")
+        if request.method == "POST"
+        else request.GET.get("channel"),
+        selected_order.sales_channel_id if selected_order else 0,
+    )
+
+    provider_id = _int(
+        request.POST.get("payment_provider")
+        if request.method == "POST"
+        else request.GET.get("provider"),
+        selected_order.payment_provider_id if selected_order else 0,
+    )
+
+    selected_business = next(
+        (row for row in businesses if row.id == business_id),
+        None,
+    )
+    selected_channel = next(
+        (row for row in channels if row.id == channel_id),
+        None,
+    )
+    selected_provider = next(
+        (row for row in providers if row.id == provider_id),
+        None,
+    )
+
+    if selected_order is None and request.method != "POST":
+        if selected_business is None and businesses:
+            selected_business = businesses[0]
+        if selected_channel is None and channels:
+            selected_channel = channels[0]
+
+    variants_qs = ProductVariant.objects.filter(
+        active=True,
+        product__active=True,
+        size__active=True,
+        color__active=True,
+    )
+
+    if selected_business is not None:
+        variants_qs = variants_qs.filter(
+            product__business=selected_business
+        )
+    else:
+        variants_qs = variants_qs.none()
+
+    variants = list(
+        variants_qs
+        .select_related("product", "product__business", "size", "color")
+        .order_by(
+            "product__code",
+            "size__sort_order",
+            "color__name",
+        )
+    )
+
+    channel_price_map = {}
+
+    if selected_channel is not None and variants:
+        channel_price_map = {
+            row.variant_id: int(row.sale_price or 0)
+            for row in VariantChannelPrice.objects.filter(
+                variant_id__in=[v.id for v in variants],
+                sales_channel=selected_channel,
+                active=True,
+            )
+        }
+
+    existing = {}
+    if selected_order is not None:
+        lines_qs = selected_order.lines.all()
+        if request.method == "POST":
+            lines_qs = lines_qs.select_for_update()
+        existing = {
+            row.variant_id: row
+            for row in lines_qs
+        }
 
     if request.method == "POST":
+        if selected_business is None:
+            raise ValueError("بیزنس را انتخاب کن.")
+
+        if selected_channel is None:
+            raise ValueError("کانال فروش را انتخاب کن.")
+
+        if (
+            selected_order
+            and selected_order.lines.exists()
+            and selected_order.business_id != selected_business.id
+        ):
+            raise ValueError(
+                "بیزنس فاکتوری که ردیف فروش دارد قابل تغییر نیست."
+            )
+
+        default_status = (
+            SaleOrder.PaymentStatus.PENDING
+            if selected_provider
+            else SaleOrder.PaymentStatus.RECEIVED
+        )
+
+        payment_status = (
+            request.POST.get("payment_status")
+            or (
+                selected_order.payment_status
+                if selected_order
+                else default_status
+            )
+        ).strip()
+
+        valid_statuses = {
+            value
+            for value, _label in SaleOrder.PaymentStatus.choices
+        }
+
+        if payment_status not in valid_statuses:
+            raise ValueError("وضعیت پرداخت معتبر نیست.")
+
+        expected_raw = (
+            request.POST.get("expected_settlement_date")
+            or ""
+        ).strip()
+
+        settled_raw = (
+            request.POST.get("settled_date")
+            or ""
+        ).strip()
+
+        expected_date = (
+            parse_jalali_date(expected_raw)
+            if expected_raw
+            else None
+        )
+
+        settled_date = (
+            parse_jalali_date(settled_raw)
+            if settled_raw
+            else None
+        )
+
+        shipping_collected = max(
+            0,
+            _int(request.POST.get("shipping_collected")),
+        )
+
+        shipping_cost = max(
+            0,
+            _int(request.POST.get("shipping_cost")),
+        )
+
+        provider_collected_raw = (
+            request.POST.get("provider_fee_collected")
+        )
+
+        external_reference = (
+            request.POST.get("external_reference")
+            or ""
+        ).strip()[:140]
+
+        note = (
+            request.POST.get("note")
+            or ""
+        ).strip()[:250]
+
+        pricing_context_changed = False
+
+        if selected_order is None:
+            selected_order = SaleOrder.objects.create(
+                day=day,
+                business=selected_business,
+                sales_channel=selected_channel,
+                payment_provider=selected_provider,
+                payment_status=payment_status,
+                external_reference=external_reference,
+                shipping_collected=shipping_collected,
+                shipping_cost=shipping_cost,
+                provider_fee_collected=0,
+                expected_settlement_date=expected_date,
+                settled_date=settled_date,
+                note=note,
+            )
+        else:
+            pricing_context_changed = (
+                selected_order.sales_channel_id
+                != selected_channel.id
+                or selected_order.payment_provider_id
+                != (
+                    selected_provider.id
+                    if selected_provider
+                    else None
+                )
+            )
+
+            selected_order.business = selected_business
+            selected_order.sales_channel = selected_channel
+            selected_order.payment_provider = selected_provider
+            selected_order.payment_status = payment_status
+            selected_order.external_reference = external_reference
+            selected_order.shipping_collected = shipping_collected
+            selected_order.shipping_cost = shipping_cost
+            selected_order.expected_settlement_date = expected_date
+            selected_order.settled_date = settled_date
+            selected_order.note = note
+
+            selected_order.save(
+                update_fields=[
+                    "business",
+                    "sales_channel",
+                    "payment_provider",
+                    "payment_status",
+                    "external_reference",
+                    "shipping_collected",
+                    "shipping_cost",
+                    "expected_settlement_date",
+                    "settled_date",
+                    "note",
+                    "updated_at",
+                ]
+            )
+
         changed = 0
+
         for variant in variants:
-            qty = max(0, _int(request.POST.get(f"qty_{variant.id}")))
+            qty = max(
+                0,
+                _int(request.POST.get(f"qty_{variant.id}")),
+            )
+
             current = existing.get(variant.id)
+
             if current is None and qty <= 0:
                 continue
-            price = max(0, _int(request.POST.get(f"price_{variant.id}"), variant.default_sale_price))
+
+            default_price = channel_price_map.get(
+                variant.id,
+                int(variant.default_sale_price or 0),
+            )
+
+            price = max(
+                0,
+                _int(
+                    request.POST.get(f"price_{variant.id}"),
+                    default_price,
+                ),
+            )
+
             if qty > 0 and price <= 0:
-                raise ValueError(f"قیمت فروش {variant} باید بیشتر از صفر باشد.")
+                raise ValueError(
+                    f"قیمت فروش {variant} باید بیشتر از صفر باشد."
+                )
+
             if current is None:
+                snapshots = sale_cost_snapshots(
+                    sale_price=price,
+                    variant=variant,
+                    sales_channel=selected_channel,
+                    payment_provider=selected_provider,
+                )
+
                 current = SaleLine.objects.create(
                     day=day,
+                    order=selected_order,
                     variant=variant,
+                    business=selected_business,
+                    sales_channel=selected_channel,
+                    payment_provider=selected_provider,
                     quantity=0,
                     sale_price=price,
-                    unit_cost_snapshot=int(variant.unit_cost or 0),
-                    digikala_fee_unit=digikala_fee_for_unit(price),
+                    unit_cost_snapshot=int(
+                        variant.unit_cost or 0
+                    ),
+                    **snapshots,
                 )
-            old_price = int(current.sale_price or 0)
-            current.quantity = qty
-            current.sale_price = price
-            if int(current.unit_cost_snapshot or 0) <= 0 and int(current.inventory_applied_quantity or 0) <= 0:
-                current.unit_cost_snapshot = int(variant.unit_cost or 0)
-            if old_price != price or int(current.digikala_fee_unit or 0) <= 0:
-                current.digikala_fee_unit = digikala_fee_for_unit(price)
-            current.save(update_fields=[
-                "quantity", "sale_price", "unit_cost_snapshot", "digikala_fee_unit", "updated_at"
-            ])
+
+            else:
+                old_price = int(
+                    current.sale_price or 0
+                )
+
+                current.quantity = qty
+                current.sale_price = price
+                current.business = selected_business
+                current.sales_channel = selected_channel
+                current.payment_provider = selected_provider
+
+                if (
+                    int(current.unit_cost_snapshot or 0) <= 0
+                    and int(
+                        current.inventory_applied_quantity or 0
+                    ) <= 0
+                ):
+                    current.unit_cost_snapshot = int(
+                        variant.unit_cost or 0
+                    )
+
+                if (
+                    old_price != price
+                    or pricing_context_changed
+                ):
+                    snapshots = sale_cost_snapshots(
+                        sale_price=price,
+                        variant=variant,
+                        sales_channel=selected_channel,
+                        payment_provider=selected_provider,
+                    )
+
+                    for key, value in snapshots.items():
+                        setattr(current, key, value)
+
+                current.save(
+                    update_fields=[
+                        "business",
+                        "sales_channel",
+                        "payment_provider",
+                        "quantity",
+                        "sale_price",
+                        "unit_cost_snapshot",
+                        "digikala_fee_unit",
+                        "channel_fee_unit_snapshot",
+                        "channel_tax_unit_snapshot",
+                        "provider_fee_unit_snapshot",
+                        "provider_tax_unit_snapshot",
+                        "updated_at",
+                    ]
+                )
+
             sync_sale_inventory(current)
             changed += 1
-        messages.success(request, f"فروش روز ذخیره شد؛ {changed} ردیف بررسی/همگام شد.")
-        return redirect("sale_day", day_id=day.id)
+
+        if provider_collected_raw in (None, ""):
+            auto_provider_collected = 0
+
+            for line in selected_order.lines.all():
+                qty = int(line.quantity or 0)
+
+                auto_provider_collected += qty * (
+                    int(
+                        line.provider_fee_unit_snapshot
+                        or 0
+                    )
+                    + int(
+                        line.provider_tax_unit_snapshot
+                        or 0
+                    )
+                )
+
+            selected_order.provider_fee_collected = (
+                auto_provider_collected
+            )
+        else:
+            selected_order.provider_fee_collected = max(
+                0,
+                _int(provider_collected_raw),
+            )
+
+        selected_order.save(
+            update_fields=[
+                "provider_fee_collected",
+                "updated_at",
+            ]
+        )
+
+        messages.success(
+            request,
+            f"فاکتور فروش ذخیره شد؛ {changed} ردیف همگام شد.",
+        )
+
+        return redirect(
+            f"{request.path}?order={selected_order.id}"
+        )
+
+    if selected_order is not None:
+        existing = {
+            row.variant_id: row
+            for row in selected_order.lines.all()
+        }
 
     rows = []
-    total = _empty_metrics()
+
     for variant in variants:
         line = existing.get(variant.id)
-        metrics = sale_metrics(line) if line else None
-        if metrics:
-            for key in ("gross", "digikala_fee", "cogs", "profit", "quantity"):
-                total[key] += metrics[key]
+
         rows.append({
             "variant": variant,
             "line": line,
-            "quantity": int(line.quantity or 0) if line else 0,
-            "price": int(line.sale_price or 0) if line else int(variant.default_sale_price or 0),
-            "metrics": metrics,
+            "quantity": (
+                int(line.quantity or 0)
+                if line
+                else 0
+            ),
+            "price": (
+                int(line.sale_price or 0)
+                if line
+                else channel_price_map.get(
+                    variant.id,
+                    int(variant.default_sale_price or 0),
+                )
+            ),
+            "metrics": (
+                sale_metrics(line)
+                if line
+                else None
+            ),
         })
-    total["margin"] = total["profit"] * 100 / total["gross"] if total["gross"] else 0
-    return render(request, "dia_core/sale_day.html", {
-        "day": day,
-        "date_j": format_jalali(day.date),
-        "rows": rows,
-        "total": total,
-    })
+
+    selected_lines = (
+        list(selected_order.lines.all())
+        if selected_order
+        else []
+    )
+
+    total = _sum_lines(selected_lines)
+
+    order_rows = []
+
+    for order in orders:
+        order_rows.append({
+            "order": order,
+            "total": _sum_lines(
+                list(order.lines.all())
+            ),
+        })
+
+    return render(
+        request,
+        "dia_core/sale_day.html",
+        {
+            "day": day,
+            "date_j": format_jalali(day.date),
+            "rows": rows,
+            "total": total,
+            "businesses": businesses,
+            "channels": channels,
+            "providers": providers,
+            "orders": order_rows,
+            "selected_order": selected_order,
+            "selected_business": selected_business,
+            "selected_channel": selected_channel,
+            "selected_provider": selected_provider,
+            "selected_expected_j": (
+                format_jalali(selected_order.expected_settlement_date)
+                if selected_order
+                else ""
+            ),
+            "selected_settled_j": (
+                format_jalali(selected_order.settled_date)
+                if selected_order
+                else ""
+            ),
+            "payment_status_choices": (
+                SaleOrder.PaymentStatus.choices
+            ),
+        },
+    )
 
 
 @login_required
@@ -497,6 +995,35 @@ def settings_home(request):
             variant.save(update_fields=["default_sale_price", "unit_cost", "active"])
             stock_for(variant)
             messages.success(request, "مدل/واریانت محصول ذخیره شد.")
+        elif action == "channel_price":
+            variant = get_object_or_404(
+                ProductVariant,
+                id=request.POST.get("variant"),
+            )
+            channel = get_object_or_404(
+                SalesChannel,
+                id=request.POST.get("sales_channel"),
+                active=True,
+            )
+            sale_price = max(
+                0,
+                _int(request.POST.get("sale_price")),
+            )
+
+            VariantChannelPrice.objects.update_or_create(
+                variant=variant,
+                sales_channel=channel,
+                defaults={
+                    "sale_price": sale_price,
+                    "active": True,
+                },
+            )
+
+            messages.success(
+                request,
+                "قیمت فروش این کانال ذخیره شد.",
+            )
+
         elif action == "commission":
             fields = {
                 "digikala_commission_percent": "کمیسیون دیجی‌کالا (%)",
@@ -521,6 +1048,25 @@ def settings_home(request):
         "sizes": Size.objects.all(),
         "colors": Color.objects.all(),
         "products": Product.objects.all(),
-        "variants": ProductVariant.objects.select_related("product", "size", "color").all(),
+        "variants": ProductVariant.objects.select_related(
+            "product",
+            "size",
+            "color",
+        ).all(),
+        "sales_channels": SalesChannel.objects.filter(
+            active=True
+        ).order_by("title"),
+        "channel_prices": VariantChannelPrice.objects.filter(
+            active=True
+        ).select_related(
+            "variant",
+            "variant__product",
+            "variant__size",
+            "variant__color",
+            "sales_channel",
+        ).order_by(
+            "variant__product__code",
+            "sales_channel__title",
+        ),
         "settings": settings,
     })

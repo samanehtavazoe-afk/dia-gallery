@@ -1,4 +1,92 @@
-{% extends 'dia_core/base.html' %}{% load dia_tags %}{% block title %}تنظیمات | Dia Gallery{% endblock %}{% block content %}
+{% extends 'dia_core/base.html' %}{% load dia_tags %}{% block title %}تنظیمات | Dia Gallery
+<div class="card mb-4">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title mb-1">قیمت فروش هر کانال</h3>
+      <div class="text-secondary small">
+        برای هر واریانت می‌توانی قیمت سایت، باسلام، دیجی‌کالا یا حضوری را جدا ثبت کنی.
+      </div>
+    </div>
+  </div>
+
+  <div class="card-body">
+    <form method="post" class="row g-2">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="channel_price">
+
+      <div class="col-md-5">
+        <label class="form-label">محصول / مدل</label>
+        <select class="form-select" name="variant" required>
+          <option value="">انتخاب</option>
+          {% for v in variants %}
+            <option value="{{ v.id }}">
+              {{ v.product.code }} / {{ v.size.name }} / {{ v.color.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">کانال فروش</label>
+        <select class="form-select" name="sales_channel" required>
+          <option value="">انتخاب</option>
+          {% for c in sales_channels %}
+            <option value="{{ c.id }}">{{ c.title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">قیمت فروش</label>
+        <input
+          class="form-control money"
+          type="number"
+          min="0"
+          name="sale_price"
+          required
+        >
+      </div>
+
+      <div class="col-md-1 d-flex align-items-end">
+        <button class="btn btn-primary w-100">ذخیره</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-vcenter">
+      <thead>
+        <tr>
+          <th>محصول</th>
+          <th>سایز</th>
+          <th>رنگ</th>
+          <th>کانال</th>
+          <th>قیمت فروش</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for row in channel_prices %}
+          <tr>
+            <td>{{ row.variant.product.code }}</td>
+            <td>{{ row.variant.size.name }}</td>
+            <td>{{ row.variant.color.name }}</td>
+            <td>{{ row.sales_channel.title }}</td>
+            <td class="money">{{ row.sale_price|groupnum }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="5" class="text-center text-secondary py-4">
+              هنوز قیمت اختصاصی برای هیچ کانالی ثبت نشده.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}{% block content %}
 <div class="mb-4"><div class="page-kicker">تنظیمات و تعاریف</div><h1 class="page-title mb-1">کاتالوگ Dia Gallery</h1><div class="text-secondary">این نصب عمداً خالی است؛ محصولات، سایزها و رنگ‌ها را از همین‌جا تعریف کن.</div></div>
 <div class="row g-3 mb-4">
 <div class="col-lg-4"><div class="card h-100"><div class="card-header"><h3 class="card-title mb-0">سایز جدید</h3></div><div class="card-body"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="size"><div class="mb-3"><label class="form-label">نام سایز</label><input class="form-control" name="name" required></div><div class="mb-3"><label class="form-label">ترتیب</label><input class="form-control num" type="number" name="sort_order" value="0"></div><button class="btn btn-primary w-100">اضافه کردن سایز</button></form><hr>{% for row in sizes %}<span class="badge bg-secondary-lt me-1 mb-1">{{ row.name }}</span>{% empty %}<small class="text-secondary">هنوز سایزی نیست.</small>{% endfor %}</div></div></div>

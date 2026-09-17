@@ -28,6 +28,13 @@ class Color(models.Model):
 
 class Product(models.Model):
     code = models.CharField(max_length=60, unique=True)
+    business = models.ForeignKey(
+        "Business",
+        on_delete=models.PROTECT,
+        related_name="products",
+        null=True,
+        blank=True,
+    )
     title = models.CharField(max_length=140, blank=True)
     active = models.BooleanField(default=True)
     note = models.CharField(max_length=250, blank=True)
@@ -55,6 +62,37 @@ class ProductVariant(models.Model):
 
     def __str__(self):
         return f"{self.product.code} / {self.size.name} / {self.color.name}"
+
+
+class VariantChannelPrice(models.Model):
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.CASCADE,
+        related_name="channel_prices",
+    )
+    sales_channel = models.ForeignKey(
+        "SalesChannel",
+        on_delete=models.CASCADE,
+        related_name="variant_prices",
+    )
+    sale_price = models.PositiveBigIntegerField(default=0)
+    active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["variant", "sales_channel"],
+                name="uniq_dia_variant_channel_price",
+            )
+        ]
+        ordering = [
+            "variant__product__code",
+            "sales_channel__title",
+        ]
+
+    def __str__(self):
+        return f"{self.variant} - {self.sales_channel}: {self.sale_price}"
 
 
 class StockLocation(models.Model):
@@ -105,6 +143,43 @@ class InventoryMovement(models.Model):
         ordering = ["-id"]
 
 
+class Business(models.Model):
+    code = models.CharField(max_length=30, unique=True)
+    title = models.CharField(max_length=100)
+    start_date = models.DateField(null=True, blank=True)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["title"]
+
+    def __str__(self):
+        return self.title
+
+
+class SalesChannel(models.Model):
+    code = models.CharField(max_length=30, unique=True)
+    title = models.CharField(max_length=100)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["title"]
+
+    def __str__(self):
+        return self.title
+
+
+class PaymentProvider(models.Model):
+    code = models.CharField(max_length=30, unique=True)
+    title = models.CharField(max_length=100)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["title"]
+
+    def __str__(self):
+        return self.title
+
+
 class SaleDay(models.Model):
     date = models.DateField(unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -117,20 +192,108 @@ class SaleDay(models.Model):
         return str(self.date)
 
 
+class SaleOrder(models.Model):
+    class PaymentStatus(models.TextChoices):
+        RECEIVED = "received", "واریز شده"
+        PENDING = "pending", "در انتظار تسویه"
+        SETTLED = "settled", "تسویه شده"
+        CANCELLED = "cancelled", "لغو / مرجوع"
+
+    day = models.ForeignKey(
+        SaleDay,
+        on_delete=models.CASCADE,
+        related_name="orders",
+    )
+    business = models.ForeignKey(
+        Business,
+        on_delete=models.PROTECT,
+        related_name="sale_orders",
+    )
+    sales_channel = models.ForeignKey(
+        SalesChannel,
+        on_delete=models.PROTECT,
+        related_name="sale_orders",
+    )
+    payment_provider = models.ForeignKey(
+        PaymentProvider,
+        on_delete=models.PROTECT,
+        related_name="sale_orders",
+        null=True,
+        blank=True,
+    )
+    payment_status = models.CharField(
+        max_length=20,
+        choices=PaymentStatus.choices,
+        default=PaymentStatus.RECEIVED,
+        db_index=True,
+    )
+    external_reference = models.CharField(
+        max_length=140,
+        blank=True,
+        db_index=True,
+    )
+    shipping_collected = models.PositiveBigIntegerField(default=0)
+    shipping_cost = models.PositiveBigIntegerField(default=0)
+    provider_fee_collected = models.PositiveBigIntegerField(default=0)
+    expected_settlement_date = models.DateField(null=True, blank=True)
+    settled_date = models.DateField(null=True, blank=True)
+    note = models.CharField(max_length=250, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-day__date", "-id"]
+
+
 class SaleLine(models.Model):
     day = models.ForeignKey(SaleDay, on_delete=models.CASCADE, related_name="lines")
+    order = models.ForeignKey(
+        SaleOrder,
+        on_delete=models.CASCADE,
+        related_name="lines",
+        null=True,
+        blank=True,
+    )
     variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT, related_name="sale_lines")
     quantity = models.PositiveIntegerField(default=0)
     inventory_applied_quantity = models.PositiveIntegerField(default=0)
     sale_price = models.PositiveBigIntegerField(default=0)
     unit_cost_snapshot = models.PositiveBigIntegerField(default=0)
     digikala_fee_unit = models.PositiveBigIntegerField(default=0)
+    business = models.ForeignKey(
+        Business,
+        on_delete=models.PROTECT,
+        related_name="sale_lines",
+        null=True,
+        blank=True,
+    )
+    sales_channel = models.ForeignKey(
+        SalesChannel,
+        on_delete=models.PROTECT,
+        related_name="sale_lines",
+        null=True,
+        blank=True,
+    )
+    payment_provider = models.ForeignKey(
+        PaymentProvider,
+        on_delete=models.PROTECT,
+        related_name="sale_lines",
+        null=True,
+        blank=True,
+    )
+    channel_fee_unit_snapshot = models.PositiveBigIntegerField(default=0)
+    channel_tax_unit_snapshot = models.PositiveBigIntegerField(default=0)
+    provider_fee_unit_snapshot = models.PositiveBigIntegerField(default=0)
+    provider_tax_unit_snapshot = models.PositiveBigIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["day", "variant"], name="uniq_dia_day_variant")
+            models.UniqueConstraint(
+                fields=["order", "variant"],
+                name="uniq_dia_order_variant",
+            )
         ]
         ordering = ["variant__product__code", "variant__size__sort_order", "variant__color__name"]
 
@@ -179,8 +342,114 @@ class InventoryAdjustment(models.Model):
         ordering = ["-date", "-id"]
 
 
+class BusinessExpense(models.Model):
+    class ExpenseType(models.TextChoices):
+        POST = "post", "پست"
+        PACKAGING = "packaging", "بسته‌بندی"
+        ADVERTISING = "advertising", "تبلیغات"
+        OTHER = "other", "سایر"
+
+    date = models.DateField(db_index=True)
+    business = models.ForeignKey(
+        Business,
+        on_delete=models.PROTECT,
+        related_name="expenses",
+    )
+    sales_channel = models.ForeignKey(
+        SalesChannel,
+        on_delete=models.PROTECT,
+        related_name="expenses",
+        null=True,
+        blank=True,
+    )
+    expense_type = models.CharField(
+        max_length=20,
+        choices=ExpenseType.choices,
+        default=ExpenseType.OTHER,
+    )
+    amount = models.PositiveBigIntegerField(validators=[MinValueValidator(1)])
+    paid_from = models.ForeignKey(
+        "Account",
+        on_delete=models.PROTECT,
+        related_name="business_expenses",
+        null=True,
+        blank=True,
+    )
+    note = models.CharField(max_length=250, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date", "-id"]
+
+
+class PlatformSettlement(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "در انتظار تسویه"
+        SETTLED = "settled", "تسویه شده"
+        CANCELLED = "cancelled", "لغو شده"
+
+    business = models.ForeignKey(
+        Business,
+        on_delete=models.PROTECT,
+        related_name="settlements",
+    )
+    sales_channel = models.ForeignKey(
+        SalesChannel,
+        on_delete=models.PROTECT,
+        related_name="settlements",
+    )
+    payment_provider = models.ForeignKey(
+        PaymentProvider,
+        on_delete=models.PROTECT,
+        related_name="settlements",
+        null=True,
+        blank=True,
+    )
+    period_start = models.DateField(null=True, blank=True)
+    period_end = models.DateField(null=True, blank=True)
+    gross_amount = models.PositiveBigIntegerField(default=0)
+    fee_amount = models.PositiveBigIntegerField(default=0)
+    tax_amount = models.PositiveBigIntegerField(default=0)
+    shipping_amount = models.PositiveBigIntegerField(default=0)
+    other_deductions = models.PositiveBigIntegerField(default=0)
+    net_amount = models.PositiveBigIntegerField(default=0)
+    expected_settlement_date = models.DateField(null=True, blank=True)
+    settled_date = models.DateField(null=True, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    note = models.CharField(max_length=250, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-expected_settlement_date", "-id"]
+
+
 class Account(models.Model):
+    class Kind(models.TextChoices):
+        GENERIC = "generic", "عمومی"
+        CASH = "cash", "بانک / نقد"
+        PAYABLE = "payable", "بدهی"
+        RECEIVABLE = "receivable", "طلب"
+        CUSTOMER_DEPOSIT = "customer_deposit", "بیعانه مشتری"
+
     title = models.CharField(max_length=100, unique=True)
+    kind = models.CharField(
+        max_length=30,
+        choices=Kind.choices,
+        default=Kind.GENERIC,
+        db_index=True,
+    )
+    business = models.ForeignKey(
+        Business,
+        on_delete=models.PROTECT,
+        related_name="accounts",
+        null=True,
+        blank=True,
+    )
     opening_balance = models.BigIntegerField(default=0)
     active = models.BooleanField(default=True)
 

@@ -1719,3 +1719,68 @@ catalog definitions
 It intentionally contains no other business's operational data and no external Digikala/Telegram API integration.
 
 This baseline should remain safe, understandable and reversible as new Dia-specific features are added.
+
+---
+
+# 2026-09-17 — FINANCE / MULTI-BUSINESS SALES ARCHITECTURE
+
+Dia Gallery was extended from a single daily-sale workflow into an order-based,
+multi-business finance structure.
+
+New domain concepts:
+
+- `Business`
+- `SalesChannel`
+- `PaymentProvider`
+- `SaleOrder`
+- `BusinessExpense`
+- `PlatformSettlement`
+- `VariantChannelPrice`
+
+Sales architecture:
+
+A `SaleOrder` represents one customer invoice/order and owns order-level financial
+information such as:
+
+- business
+- sales channel
+- payment provider
+- payment status
+- external order/reference number
+- shipping collected from customer
+- actual shipping cost
+- provider fee collected from customer
+- expected settlement date
+- actual settlement date
+
+Each order may contain multiple `SaleLine` rows.
+
+`SaleLine` remains responsible for per-product historical snapshots and inventory
+synchronization. Inventory continues to use `inventory_applied_quantity` and
+delta-based stock movements.
+
+Shipping must NOT be moved back onto individual sale lines because one order may
+contain multiple products and shipping must only be counted once.
+
+Channel pricing:
+
+`VariantChannelPrice` allows a product variant to have a different sale price for
+each sales channel. When no active channel-specific price exists, the variant's
+`default_sale_price` is used.
+
+Historical accounting rule:
+
+Changing current product costs, channel prices or provider settings must not rewrite
+historical sales snapshots.
+
+Fresh database rule:
+
+Real Dia / Bodyguard / Holder balances, supplier debts, deposits, product prices and
+operational transactions must not be hard-coded into migrations or base seed data.
+They are production/business data and must be entered separately.
+
+Testing:
+
+The changes were migrated on an isolated PostgreSQL 16 test container, separate from
+the production database. Migration drift reported no changes, and the full Django
+test suite passed 9 tests.

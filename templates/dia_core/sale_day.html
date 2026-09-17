@@ -1,5 +1,439 @@
-{% extends 'dia_core/base.html' %}{% load dia_tags %}{% block title %}فروش {{ date_j }} | Dia Gallery{% endblock %}{% block content %}
-<div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4"><div><div class="page-kicker">فروش روزانه</div><h1 class="page-title mb-1">{{ date_j }}</h1><div class="text-secondary">فروش دیجی‌کالا به‌صورت دستی؛ کمیسیون هنگام ذخیره محاسبه و روی همان ردیف فریز می‌شود.</div></div><a class="btn btn-outline-light" href="{% url 'sale_start' %}">تقویم فروش</a></div>
-<div class="row g-2 mb-3"><div class="col-6 col-lg-3"><div class="card"><div class="card-body"><div class="text-secondary small">فروش</div><strong class="fs-3 money">{{ total.gross|groupnum }}</strong></div></div></div><div class="col-6 col-lg-3"><div class="card"><div class="card-body"><div class="text-secondary small">کمیسیون دیجی‌کالا</div><strong class="fs-3 money">{{ total.digikala_fee|groupnum }}</strong></div></div></div><div class="col-6 col-lg-3"><div class="card"><div class="card-body"><div class="text-secondary small">بهای کالا</div><strong class="fs-3 money">{{ total.cogs|groupnum }}</strong></div></div></div><div class="col-6 col-lg-3"><div class="card"><div class="card-body"><div class="text-secondary small">سود</div><strong class="fs-3 money {% if total.profit >= 0 %}text-success{% else %}text-danger{% endif %}">{{ total.profit|groupnum }}</strong></div></div></div></div>
-<form method="post">{% csrf_token %}<div class="card"><div class="card-header"><h3 class="card-title mb-0">ردیف‌های فروش</h3></div><div class="table-responsive"><table class="table table-vcenter"><thead><tr><th>محصول</th><th>سایز</th><th>رنگ</th><th>تعداد</th><th>قیمت فروش</th><th>کمیسیون/عدد</th><th>سود ردیف</th></tr></thead><tbody>{% for row in rows %}<tr><td><strong>{{ row.variant.product.code }}</strong>{% if row.variant.product.title %}<div class="text-secondary small">{{ row.variant.product.title }}</div>{% endif %}</td><td>{{ row.variant.size.name }}</td><td>{{ row.variant.color.name }}</td><td style="min-width:120px"><input class="form-control num" type="number" min="0" name="qty_{{ row.variant.id }}" value="{{ row.quantity }}"></td><td style="min-width:160px"><input class="form-control money" type="number" min="0" name="price_{{ row.variant.id }}" value="{{ row.price }}"></td><td class="money">{% if row.line %}{{ row.line.digikala_fee_unit|groupnum }}{% else %}—{% endif %}</td><td class="money {% if row.metrics and row.metrics.profit >= 0 %}text-success{% elif row.metrics %}text-danger{% endif %}">{% if row.metrics %}{{ row.metrics.profit|groupnum }}{% else %}—{% endif %}</td></tr>{% empty %}<tr><td colspan="7" class="text-center text-secondary py-5">هنوز محصول/واریانتی تعریف نشده. ابتدا از تنظیمات تعریف کن.</td></tr>{% endfor %}</tbody></table></div>{% if rows %}<div class="sticky-actions d-flex justify-content-end"><button class="btn btn-primary px-5" type="submit">ذخیره فروش روز</button></div>{% endif %}</div></form>
+{% extends 'dia_core/base.html' %}
+{% load dia_tags %}
+
+{% block title %}فروش {{ date_j }} | Dia Gallery{% endblock %}
+
+{% block content %}
+
+<div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4">
+  <div>
+    <div class="page-kicker">فروش روزانه</div>
+    <h1 class="page-title mb-1">{{ date_j }}</h1>
+    <div class="text-secondary">
+      ثبت فاکتور فروش بر اساس بیزنس، کانال فروش و روش پرداخت
+    </div>
+  </div>
+
+  <div class="d-flex gap-2">
+    {% if selected_order %}
+      <a class="btn btn-outline-light" href="{{ request.path }}">فاکتور جدید</a>
+    {% endif %}
+    <a class="btn btn-outline-light" href="{% url 'sale_start' %}">تقویم فروش</a>
+  </div>
+</div>
+
+
+<div class="row g-2 mb-4">
+  <div class="col-6 col-xl-2">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-secondary small">فروش کالا</div>
+        <strong class="fs-4 money">{{ total.gross|groupnum }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-xl-2">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-secondary small">دریافتی از مشتری</div>
+        <strong class="fs-4 money">{{ total.customer_total|groupnum }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-xl-2">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-secondary small">کل کارمزدها</div>
+        <strong class="fs-4 money">{{ total.total_fees|groupnum }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-xl-2">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-secondary small">بهای کالا</div>
+        <strong class="fs-4 money">{{ total.cogs|groupnum }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-secondary small">سود فاکتور</div>
+        <strong class="fs-3 money {% if total.profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+          {{ total.profit|groupnum }}
+        </strong>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<form method="post">
+  {% csrf_token %}
+
+  {% if selected_order %}
+    <input type="hidden" name="order_id" value="{{ selected_order.id }}">
+  {% endif %}
+
+  <div class="card mb-4">
+    <div class="card-header">
+      <div>
+        <h3 class="card-title mb-1">
+          {% if selected_order %}
+            ویرایش فاکتور #{{ selected_order.id }}
+          {% else %}
+            فاکتور جدید
+          {% endif %}
+        </h3>
+        <div class="text-secondary small">
+          مشخصات فروش و وضعیت پول اینجا ثبت می‌شود.
+        </div>
+      </div>
+    </div>
+
+    <div class="card-body">
+      <div class="row g-3">
+
+        <div class="col-md-4">
+          <label class="form-label">بیزنس</label>
+          <select class="form-select" name="business" id="businessSelect" required>
+            <option value="">انتخاب کن</option>
+            {% for business in businesses %}
+              <option
+                value="{{ business.id }}"
+                {% if selected_business and business.id == selected_business.id %}selected{% endif %}
+              >
+                {{ business.title }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label">کانال فروش</label>
+          <select class="form-select" name="sales_channel" required>
+            <option value="">انتخاب کن</option>
+            {% for channel in channels %}
+              <option
+                value="{{ channel.id }}"
+                {% if selected_channel and channel.id == selected_channel.id %}selected{% endif %}
+              >
+                {{ channel.title }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label">روش پرداخت</label>
+          <select class="form-select" name="payment_provider">
+            <option value="">واریز مستقیم / نقدی</option>
+            {% for provider in providers %}
+              <option
+                value="{{ provider.id }}"
+                {% if selected_provider and provider.id == selected_provider.id %}selected{% endif %}
+              >
+                {{ provider.title }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label">وضعیت پول</label>
+          <select class="form-select" name="payment_status">
+            {% for value, label in payment_status_choices %}
+              <option
+                value="{{ value }}"
+                {% if selected_order and selected_order.payment_status == value %}selected{% endif %}
+              >
+                {{ label }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label">شماره سفارش / مرجع</label>
+          <input
+            class="form-control"
+            type="text"
+            name="external_reference"
+            value="{% if selected_order %}{{ selected_order.external_reference }}{% endif %}"
+            placeholder="اختیاری"
+          >
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label">تاریخ تسویه مورد انتظار</label>
+          <input
+            class="form-control"
+            type="text"
+            name="expected_settlement_date"
+            value="{{ selected_expected_j }}"
+            placeholder="1405/07/07"
+          >
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label">تاریخ تسویه واقعی</label>
+          <input
+            class="form-control"
+            type="text"
+            name="settled_date"
+            value="{{ selected_settled_j }}"
+            placeholder="1405/07/07"
+          >
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label">هزینه ارسال گرفته‌شده از مشتری</label>
+          <input
+            class="form-control money"
+            type="number"
+            min="0"
+            name="shipping_collected"
+            value="{% if selected_order %}{{ selected_order.shipping_collected }}{% else %}0{% endif %}"
+          >
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label">هزینه واقعی ارسال</label>
+          <input
+            class="form-control money"
+            type="number"
+            min="0"
+            name="shipping_cost"
+            value="{% if selected_order %}{{ selected_order.shipping_cost }}{% else %}0{% endif %}"
+          >
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label">کارمزد اضافه گرفته‌شده از مشتری</label>
+          <input
+            class="form-control money"
+            type="number"
+            min="0"
+            name="provider_fee_collected"
+            value="{% if selected_order %}{{ selected_order.provider_fee_collected }}{% endif %}"
+            placeholder="اگر خالی باشد خودکار محاسبه می‌شود"
+          >
+          <div class="form-hint text-secondary">
+            مخصوص Snapp / DigiPay / TorobPay و روش‌های مشابه
+          </div>
+        </div>
+
+        <div class="col-md-8">
+          <label class="form-label">توضیح</label>
+          <input
+            class="form-control"
+            type="text"
+            name="note"
+            value="{% if selected_order %}{{ selected_order.note }}{% endif %}"
+            placeholder="اختیاری"
+          >
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+
+  <div class="card mb-4">
+    <div class="card-header">
+      <div>
+        <h3 class="card-title mb-1">کالاهای فاکتور</h3>
+        <div class="text-secondary small">
+          تعداد و قیمت فروش را وارد کن. موجودی بر اساس تغییر تعداد همگام می‌شود.
+        </div>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-vcenter">
+        <thead>
+          <tr>
+            <th>محصول</th>
+            <th>سایز</th>
+            <th>رنگ</th>
+            <th>تعداد</th>
+            <th>قیمت فروش</th>
+            <th>کارمزد</th>
+            <th>سود ردیف</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              <td>
+                <strong>{{ row.variant.product.code }}</strong>
+                {% if row.variant.product.title %}
+                  <div class="text-secondary small">
+                    {{ row.variant.product.title }}
+                  </div>
+                {% endif %}
+              </td>
+
+              <td>{{ row.variant.size.name }}</td>
+              <td>{{ row.variant.color.name }}</td>
+
+              <td style="min-width:120px">
+                <input
+                  class="form-control num"
+                  type="number"
+                  min="0"
+                  name="qty_{{ row.variant.id }}"
+                  value="{{ row.quantity }}"
+                >
+              </td>
+
+              <td style="min-width:160px">
+                <input
+                  class="form-control money"
+                  type="number"
+                  min="0"
+                  name="price_{{ row.variant.id }}"
+                  value="{{ row.price }}"
+                >
+              </td>
+
+              <td class="money">
+                {% if row.metrics %}
+                  {{ row.metrics.total_fees|groupnum }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+
+              <td class="money {% if row.metrics and row.metrics.profit >= 0 %}text-success{% elif row.metrics %}text-danger{% endif %}">
+                {% if row.metrics %}
+                  {{ row.metrics.profit|groupnum }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            </tr>
+
+          {% empty %}
+            <tr>
+              <td colspan="7" class="text-center text-secondary py-5">
+                برای این بیزنس هنوز محصول فعالی تعریف نشده.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sticky-actions d-flex justify-content-end">
+      <button class="btn btn-primary px-5" type="submit">
+        {% if selected_order %}
+          ذخیره تغییرات فاکتور
+        {% else %}
+          ثبت فاکتور
+        {% endif %}
+      </button>
+    </div>
+  </div>
+
+</form>
+
+
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title mb-0">فاکتورهای ثبت‌شده امروز</h3>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-vcenter">
+      <thead>
+        <tr>
+          <th>فاکتور</th>
+          <th>بیزنس</th>
+          <th>کانال</th>
+          <th>پرداخت</th>
+          <th>وضعیت</th>
+          <th>فروش</th>
+          <th>سود</th>
+          <th></th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for item in orders %}
+          <tr>
+            <td>
+              <strong>#{{ item.order.id }}</strong>
+              {% if item.order.external_reference %}
+                <div class="text-secondary small">
+                  {{ item.order.external_reference }}
+                </div>
+              {% endif %}
+            </td>
+
+            <td>{{ item.order.business.title }}</td>
+            <td>{{ item.order.sales_channel.title }}</td>
+
+            <td>
+              {% if item.order.payment_provider %}
+                {{ item.order.payment_provider.title }}
+              {% else %}
+                واریز مستقیم
+              {% endif %}
+            </td>
+
+            <td>{{ item.order.get_payment_status_display }}</td>
+
+            <td class="money">{{ item.total.customer_total|groupnum }}</td>
+
+            <td class="money {% if item.total.profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+              {{ item.total.profit|groupnum }}
+            </td>
+
+            <td>
+              <a
+                class="btn btn-outline-light btn-sm"
+                href="{{ request.path }}?order={{ item.order.id }}"
+              >
+                ویرایش
+              </a>
+            </td>
+          </tr>
+
+        {% empty %}
+          <tr>
+            <td colspan="8" class="text-center text-secondary py-5">
+              هنوز برای این روز فاکتوری ثبت نشده.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+(function () {
+  const business = document.getElementById("businessSelect");
+
+  business?.addEventListener("change", function () {
+    if (!this.value) return;
+
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.searchParams.set("business", this.value);
+    window.location.href = url.toString();
+  });
+})();
+</script>
 {% endblock %}
