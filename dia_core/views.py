@@ -38,6 +38,8 @@ from .services import (
     account_balance,
     business_transfer_position,
     counterparty_position,
+    create_counterparty_receivable,
+    settle_counterparty_receivable,
     create_account_entry,
     create_adjustment,
     create_return,
@@ -995,6 +997,71 @@ def finance(request):
             )
             messages.success(request, "طرف حساب اضافه شد.")
 
+        elif action == "counterparty_receivable":
+            counterparty = get_object_or_404(
+                Counterparty,
+                id=request.POST.get("counterparty"),
+                active=True,
+                receivable_enabled=True,
+            )
+
+            amount = max(0, _int(request.POST.get("amount")))
+            if amount <= 0:
+                raise ValueError("مبلغ طلب باید بیشتر از صفر باشد.")
+
+            when = parse_jalali_date(
+                request.POST.get("date"),
+                date.today(),
+            )
+
+            create_counterparty_receivable(
+                counterparty=counterparty,
+                date=when,
+                amount=amount,
+                note=(request.POST.get("note") or "").strip()[:250],
+            )
+
+            messages.success(
+                request,
+                f"طلب از {counterparty.title} ثبت شد.",
+            )
+
+        elif action == "settle_counterparty_receivable":
+            counterparty = get_object_or_404(
+                Counterparty,
+                id=request.POST.get("counterparty"),
+                active=True,
+                receivable_enabled=True,
+            )
+
+            bank_account = get_object_or_404(
+                Account,
+                id=request.POST.get("bank_account"),
+                active=True,
+            )
+
+            amount = max(0, _int(request.POST.get("amount")))
+            if amount <= 0:
+                raise ValueError("مبلغ تسویه باید بیشتر از صفر باشد.")
+
+            when = parse_jalali_date(
+                request.POST.get("date"),
+                date.today(),
+            )
+
+            settle_counterparty_receivable(
+                counterparty=counterparty,
+                bank_account=bank_account,
+                date=when,
+                amount=amount,
+                note=(request.POST.get("note") or "").strip()[:250],
+            )
+
+            messages.success(
+                request,
+                f"تسویه طلب از {counterparty.title} ثبت شد.",
+            )
+
         elif action == "business_transfer":
             from_business = get_object_or_404(
                 Business,
@@ -1106,6 +1173,18 @@ def finance(request):
         for counterparty in counterparties
     ]
 
+    receivable_counterparties = [
+        counterparty
+        for counterparty in counterparties
+        if counterparty.receivable_enabled
+    ]
+
+    bank_accounts = [
+        account
+        for account in accounts
+        if account.kind == Account.Kind.CASH
+    ]
+
     recent = list(AccountEntry.objects.select_related("account")[:100])
     return render(request, "dia_core/finance.html", {
         "accounts": accounts,
@@ -1115,6 +1194,8 @@ def finance(request):
         "business_positions": business_positions,
         "counterparties": counterparties,
         "counterparty_positions": counterparty_positions,
+        "receivable_counterparties": receivable_counterparties,
+        "bank_accounts": bank_accounts,
         "recent": recent,
         "today_j": format_jalali(date.today()),
     })

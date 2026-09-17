@@ -756,3 +756,271 @@ class FinanceCounterpartyTemplateTests(TestCase):
         self.assertEqual(positions[0]["payable"], 100_000_000)
         self.assertEqual(positions[0]["receivable"], 25_000_000)
         self.assertEqual(positions[0]["net"], -75_000_000)
+
+
+class CounterpartyReceivableEligibilityTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from dia_core.models import Business, Counterparty
+
+        user = get_user_model().objects.create_user(
+            username="receivable-eligibility-user",
+            password="test-pass-123",
+        )
+        self.client.force_login(user)
+
+        dia = Business.objects.create(
+            code="dia-receivable-test",
+            title="Dia",
+        )
+        holder = Business.objects.create(
+            code="holder-receivable-test",
+            title="Holder",
+        )
+        bodyguard = Business.objects.create(
+            code="bodyguard-receivable-test",
+            title="Bodyguard",
+        )
+
+        self.ali = Counterparty.objects.create(
+            title="علی",
+            business=dia,
+            receivable_enabled=True,
+        )
+        self.mehr = Counterparty.objects.create(
+            title="مهر",
+            business=holder,
+            receivable_enabled=True,
+        )
+        self.arash = Counterparty.objects.create(
+            title="آرش",
+            business=bodyguard,
+            receivable_enabled=False,
+        )
+
+    def test_only_ali_and_mehr_are_available_for_receivables(self):
+        response = self.client.get("/finance/")
+
+        self.assertEqual(response.status_code, 200)
+
+        ids = {
+            item.id
+            for item in response.context["receivable_counterparties"]
+        }
+
+        self.assertIn(self.ali.id, ids)
+        self.assertIn(self.mehr.id, ids)
+        self.assertNotIn(self.arash.id, ids)
+
+
+class CounterpartyReceivableServiceTests(TestCase):
+    def setUp(self):
+        from dia_core.models import Account, Business, Counterparty
+
+        self.dia = Business.objects.create(
+            code="dia-receivable-service",
+            title="Dia",
+        )
+
+        self.ali = Counterparty.objects.create(
+            title="علی",
+            business=self.dia,
+            receivable_enabled=True,
+        )
+
+        self.bank = Account.objects.create(
+            title="بانک تست طلب",
+            kind=Account.Kind.CASH,
+            opening_balance=100_000_000,
+        )
+
+    def test_create_receivable_increases_only_receivable(self):
+        from datetime import date
+        from dia_core.services import (
+            account_balance,
+            create_counterparty_receivable,
+        )
+
+        receivable = create_counterparty_receivable(
+            counterparty=self.ali,
+            date=date(2026, 9, 17),
+            amount=7_000_000,
+            note="سهم من نزد علی",
+        )
+
+        self.assertEqual(account_balance(receivable), 7_000_000)
+        self.assertEqual(account_balance(self.bank), 100_000_000)
+
+    def test_settlement_decreases_receivable_and_increases_bank(self):
+        from datetime import date
+        from dia_core.services import (
+            account_balance,
+            create_counterparty_receivable,
+            settle_counterparty_receivable,
+        )
+
+        receivable = create_counterparty_receivable(
+            counterparty=self.ali,
+            date=date(2026, 9, 17),
+            amount=7_000_000,
+        )
+
+        settle_counterparty_receivable(
+            counterparty=self.ali,
+            bank_account=self.bank,
+            date=date(2026, 9, 17),
+            amount=3_000_000,
+        )
+
+        self.assertEqual(account_balance(receivable), 4_000_000)
+        self.assertEqual(account_balance(self.bank), 103_000_000)
+
+    def test_cannot_settle_more_than_receivable(self):
+        from datetime import date
+        from dia_core.services import (
+            create_counterparty_receivable,
+            settle_counterparty_receivable,
+        )
+
+        create_counterparty_receivable(
+            counterparty=self.ali,
+            date=date(2026, 9, 17),
+            amount=2_000_000,
+        )
+
+        with self.assertRaises(ValueError):
+            settle_counterparty_receivable(
+                counterparty=self.ali,
+                bank_account=self.bank,
+                date=date(2026, 9, 17),
+                amount=3_000_000,
+            )
+
+
+class CounterpartyReceivableViewTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from dia_core.models import Account, Business, Counterparty
+
+        user = get_user_model().objects.create_user(
+            username="counterparty-receivable-view-user",
+            password="test-pass-123",
+        )
+        self.client.force_login(user)
+
+        dia = Business.objects.create(
+            code="dia-receivable-view",
+            title="Dia",
+        )
+
+        self.ali = Counterparty.objects.create(
+            title="علی",
+            business=dia,
+            receivable_enabled=True,
+        )
+
+        self.bank = Account.objects.create(
+            title="بانک تست تسویه طلب",
+            kind=Account.Kind.CASH,
+            opening_balance=100_000_000,
+        )
+
+    def test_finance_can_register_receivable_from_counterparty(self):
+        from dia_core.models import Account
+        from dia_core.services import account_balance
+
+        response = self.client.post(
+            "/finance/",
+            {
+                "action": "counterparty_receivable",
+                "counterparty": self.ali.id,
+                "date": "1405/06/26",
+                "amount": "7000000",
+                "note": "سهم من نزد علی",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        receivable = Account.objects.get(
+            counterparty=self.ali,
+            kind=Account.Kind.RECEIVABLE,
+        )
+
+        self.assertEqual(account_balance(receivable), 7_000_000)
+        self.assertEqual(account_balance(self.bank), 100_000_000)
+
+    def test_finance_can_settle_counterparty_receivable_to_bank(self):
+        from datetime import date
+        from dia_core.models import Account
+        from dia_core.services import (
+            account_balance,
+            create_counterparty_receivable,
+        )
+
+        receivable = create_counterparty_receivable(
+            counterparty=self.ali,
+            date=date(2026, 9, 17),
+            amount=7_000_000,
+        )
+
+        response = self.client.post(
+            "/finance/",
+            {
+                "action": "settle_counterparty_receivable",
+                "counterparty": self.ali.id,
+                "bank_account": self.bank.id,
+                "date": "1405/06/26",
+                "amount": "3000000",
+                "note": "واریز علی",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(account_balance(receivable), 4_000_000)
+        self.assertEqual(account_balance(self.bank), 103_000_000)
+
+
+class CounterpartyReceivableTemplateTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from dia_core.models import Account, Business, Counterparty
+
+        user = get_user_model().objects.create_user(
+            username="counterparty-receivable-template-user",
+            password="test-pass-123",
+        )
+        self.client.force_login(user)
+
+        dia = Business.objects.create(
+            code="dia-receivable-template",
+            title="Dia",
+        )
+
+        Counterparty.objects.create(
+            title="علی",
+            business=dia,
+            receivable_enabled=True,
+        )
+
+        Account.objects.create(
+            title="بانک تست فرم",
+            kind=Account.Kind.CASH,
+            opening_balance=100_000_000,
+        )
+
+    def test_finance_page_has_counterparty_receivable_forms(self):
+        response = self.client.get("/finance/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            'value="counterparty_receivable"',
+        )
+        self.assertContains(
+            response,
+            'value="settle_counterparty_receivable"',
+        )
+        self.assertContains(response, 'name="bank_account"')
+        self.assertContains(response, "ثبت طلب")
+        self.assertContains(response, "تسویه طلب")

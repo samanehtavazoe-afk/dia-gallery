@@ -332,3 +332,110 @@ def counterparty_position(counterparty):
         "receivable": receivable,
         "net": receivable - payable,
     }
+
+
+def _counterparty_receivable_account(counterparty):
+    account = (
+        Account.objects
+        .filter(
+            counterparty=counterparty,
+            kind=Account.Kind.RECEIVABLE,
+            active=True,
+        )
+        .first()
+    )
+    if account:
+        return account
+
+    title = f"طلب از {counterparty.title}"
+    if Account.objects.filter(title=title).exists():
+        title = f"طلب از {counterparty.title} - {counterparty.business.title}"
+
+    return Account.objects.create(
+        title=title,
+        kind=Account.Kind.RECEIVABLE,
+        business=counterparty.business,
+        counterparty=counterparty,
+        opening_balance=0,
+    )
+
+
+@transaction.atomic
+def create_counterparty_receivable(
+    *,
+    counterparty,
+    date,
+    amount,
+    note="",
+):
+    amount = int(amount or 0)
+    if amount <= 0:
+        raise ValueError("مبلغ طلب باید بیشتر از صفر باشد.")
+
+    if not counterparty.receivable_enabled:
+        raise ValueError("ثبت طلب برای این طرف حساب فعال نیست.")
+
+    account = _counterparty_receivable_account(counterparty)
+
+    create_account_entry(
+        account=account,
+        date=date,
+        delta=amount,
+        title=f"ثبت طلب از {counterparty.title}",
+        reference=f"counterparty-receivable:{counterparty.id}",
+        note=note,
+    )
+
+    return account
+
+
+@transaction.atomic
+def settle_counterparty_receivable(
+    *,
+    counterparty,
+    bank_account,
+    date,
+    amount,
+    note="",
+):
+    amount = int(amount or 0)
+    if amount <= 0:
+        raise ValueError("مبلغ تسویه باید بیشتر از صفر باشد.")
+
+    if not counterparty.receivable_enabled:
+        raise ValueError("تسویه طلب برای این طرف حساب فعال نیست.")
+
+    if bank_account.kind != Account.Kind.CASH:
+        raise ValueError("حساب مقصد باید حساب بانکی یا نقد باشد.")
+
+    account = _counterparty_receivable_account(counterparty)
+
+    account = Account.objects.select_for_update().get(pk=account.pk)
+    bank_account = Account.objects.select_for_update().get(
+        pk=bank_account.pk
+    )
+
+    current_receivable = account_balance(account)
+
+    if amount > current_receivable:
+        raise ValueError("مبلغ تسویه از مانده طلب بیشتر است.")
+
+    create_account_entry(
+        account=account,
+        date=date,
+        delta=-amount,
+        title=f"تسویه طلب از {counterparty.title}",
+        reference=f"counterparty-settlement:{counterparty.id}",
+        note=note,
+    )
+
+    create_account_entry(
+        account=bank_account,
+        date=date,
+        delta=amount,
+        title=f"دریافت از {counterparty.title}",
+        reference=f"counterparty-settlement:{counterparty.id}",
+        note=note,
+    )
+
+    return account

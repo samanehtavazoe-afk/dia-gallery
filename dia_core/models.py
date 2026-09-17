@@ -437,6 +437,7 @@ class Counterparty(models.Model):
         related_name="counterparties",
     )
     active = models.BooleanField(default=True)
+    receivable_enabled = models.BooleanField(default=False)
     note = models.CharField(max_length=250, blank=True)
 
     class Meta:
