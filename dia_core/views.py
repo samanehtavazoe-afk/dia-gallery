@@ -44,6 +44,7 @@ from .services import (
     create_adjustment,
     create_return,
     digikala_fee_for_unit,
+    default_sale_payment_status,
     main_location,
     sale_cost_snapshots,
     sale_metrics,
@@ -370,10 +371,9 @@ def sale_day(request, day_id):
                 "بیزنس فاکتوری که ردیف فروش دارد قابل تغییر نیست."
             )
 
-        default_status = (
-            SaleOrder.PaymentStatus.PENDING
-            if selected_provider
-            else SaleOrder.PaymentStatus.RECEIVED
+        default_status = default_sale_payment_status(
+            sales_channel=selected_channel,
+            payment_provider=selected_provider,
         )
 
         payment_status = (
