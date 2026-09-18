@@ -47,3 +47,13 @@ class SalesCalendarHolidayViewTests(TestCase):
             "ولادت حضرت رسول اکرم",
             response.context["day_meta"][8]["holiday_title"],
         )
+
+    def test_calendar_renders_friday_and_holiday_markers(self):
+        response = self.client.get(
+            reverse("sale_start"),
+            {"jy": 1405, "jm": 6},
+        )
+
+        self.assertContains(response, "ولادت حضرت رسول اکرم")
+        self.assertContains(response, "calendar-friday")
+        self.assertContains(response, "calendar-holiday")
