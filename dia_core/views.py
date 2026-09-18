@@ -15,9 +15,11 @@ from .models import (
     Business,
     BusinessTransfer,
     Counterparty,
+    HolderDirectOrder,
     AppSetting,
     Color,
     InventoryMovement,
+    HolderDirectOrder,
     Payment,
     Product,
     ProductVariant,
@@ -47,6 +49,7 @@ from .services import (
     default_sale_payment_status,
     main_location,
     platform_receivable_totals,
+    record_holder_receipt,
     sale_cost_snapshots,
     sale_metrics,
     stock_for,
@@ -245,6 +248,81 @@ def sale_day(request, day_id):
     if mode not in {"digikala", "site", "basalam", "holder"}:
         mode = ""
 
+    if mode == "holder":
+        if request.method == "POST":
+            customer_name = (request.POST.get("customer_name") or "").strip()
+            if not customer_name:
+                raise ValueError("نام مشتری را وارد کن.")
+
+            quantity_small = _int(request.POST.get("quantity_small"))
+            quantity_medium = _int(request.POST.get("quantity_medium"))
+            quantity_large = _int(request.POST.get("quantity_large"))
+
+            unit_price_small = _int(request.POST.get("unit_price_small"))
+            unit_price_medium = _int(request.POST.get("unit_price_medium"))
+            unit_price_large = _int(request.POST.get("unit_price_large"))
+
+            order_total = (
+                quantity_small * unit_price_small
+                + quantity_medium * unit_price_medium
+                + quantity_large * unit_price_large
+            )
+
+            if order_total <= 0:
+                raise ValueError("حداقل یک سایز با تعداد و قیمت معتبر وارد کن.")
+
+            note = (request.POST.get("note") or "").strip()
+
+            order = HolderDirectOrder.objects.create(
+                date=day.date,
+                customer_name=customer_name,
+                quantity_small=quantity_small,
+                quantity_medium=quantity_medium,
+                quantity_large=quantity_large,
+                unit_price_small=unit_price_small,
+                unit_price_medium=unit_price_medium,
+                unit_price_large=unit_price_large,
+                order_total=order_total,
+                note=note,
+            )
+
+            amount_received = _int(request.POST.get("amount_received"))
+
+            if amount_received > 0:
+                record_holder_receipt(
+                    order=order,
+                    amount=amount_received,
+                    receipt_type=(
+                        request.POST.get("receipt_type") or "deposit"
+                    ).strip(),
+                    recipient=(
+                        request.POST.get("recipient") or "samaneh"
+                    ).strip(),
+                    date=day.date,
+                    note=note,
+                )
+
+            messages.success(request, "فروش هولدر ثبت شد.")
+            return redirect(f"{request.path}?mode=holder")
+
+        holder_orders = list(
+            HolderDirectOrder.objects
+            .filter(date=day.date)
+            .prefetch_related("receipts")
+            .order_by("-id")
+        )
+
+        return render(
+            request,
+            "dia_core/sale_day.html",
+            {
+                "day": day,
+                "date_j": format_jalali(day.date),
+                "mode": mode,
+                "holder_orders": holder_orders,
+            },
+        )
+
     businesses = list(Business.objects.filter(active=True).order_by("title"))
     channels = list(SalesChannel.objects.filter(active=True).order_by("title"))
     providers = list(PaymentProvider.objects.filter(active=True).order_by("title"))
@@ -383,6 +461,56 @@ def sale_day(request, day_id):
             row.variant_id: row
             for row in lines_qs
         }
+
+    if request.method == "POST" and mode == "holder":
+        customer_name = (request.POST.get("customer_name") or "").strip()
+        if not customer_name:
+            raise ValueError("نام مشتری را وارد کن.")
+
+        quantity_small = max(0, _int(request.POST.get("quantity_small")))
+        quantity_medium = max(0, _int(request.POST.get("quantity_medium")))
+        quantity_large = max(0, _int(request.POST.get("quantity_large")))
+
+        if quantity_small + quantity_medium + quantity_large <= 0:
+            raise ValueError("حداقل یک عدد قالب وارد کن.")
+
+        unit_price_small = max(0, _int(request.POST.get("unit_price_small")))
+        unit_price_medium = max(0, _int(request.POST.get("unit_price_medium")))
+        unit_price_large = max(0, _int(request.POST.get("unit_price_large")))
+
+        order_total = (
+            quantity_small * unit_price_small
+            + quantity_medium * unit_price_medium
+            + quantity_large * unit_price_large
+        )
+
+        order = HolderDirectOrder.objects.create(
+            date=day.date,
+            customer_name=customer_name,
+            quantity_small=quantity_small,
+            quantity_medium=quantity_medium,
+            quantity_large=quantity_large,
+            unit_price_small=unit_price_small,
+            unit_price_medium=unit_price_medium,
+            unit_price_large=unit_price_large,
+            order_total=order_total,
+            note=(request.POST.get("note") or "").strip()[:250],
+        )
+
+        amount_received = max(0, _int(request.POST.get("amount_received")))
+
+        if amount_received:
+            record_holder_receipt(
+                order=order,
+                amount=amount_received,
+                receipt_type=(request.POST.get("receipt_type") or "deposit").strip(),
+                recipient=(request.POST.get("recipient") or "samaneh").strip(),
+                date=day.date,
+                note=(request.POST.get("note") or "").strip()[:250],
+            )
+
+        messages.success(request, "فروش قالب ثبت شد.")
+        return redirect(f"{request.path}?mode=holder")
 
     if request.method == "POST":
         if selected_business is None:

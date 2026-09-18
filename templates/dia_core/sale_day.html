@@ -62,12 +62,212 @@
 </div>
 {% elif mode == "holder" %}
 
-<div class="card mb-4">
-  <div class="card-body py-5 text-center">
-    <h3 class="card-title mb-2">فروش قالب</h3>
-    <div class="text-secondary">
-      فرم اختصاصی فروش هولدر در این بخش ثبت می‌شود.
+<form method="post" class="mb-4">
+  {% csrf_token %}
+  <input type="hidden" name="mode" value="holder">
+
+  <div class="card mb-4">
+    <div class="card-header">
+      <div>
+        <h3 class="card-title mb-1">فروش مستقیم هولدر</h3>
+        <div class="text-secondary small">
+          تعداد سه سایز و مبلغ دریافتی مشتری را ثبت کن.
+        </div>
+      </div>
     </div>
+
+    <div class="card-body">
+      <div class="row g-3">
+
+        <div class="col-12">
+          <label class="form-label">نام مشتری</label>
+          <input
+            class="form-control"
+            type="text"
+            name="customer_name"
+            required
+          >
+        </div>
+
+        <div class="col-12 col-lg-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <h4 class="mb-3">سایز کوچک</h4>
+
+              <label class="form-label">تعداد</label>
+              <input
+                class="form-control num mb-3"
+                type="number"
+                min="0"
+                name="quantity_small"
+                value="0"
+              >
+
+              <label class="form-label">قیمت واحد</label>
+              <input
+                class="form-control money"
+                type="number"
+                min="0"
+                name="unit_price_small"
+                value="90000"
+              >
+            </div>
+          </div>
+        </div>
+
+        <div class="col-12 col-lg-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <h4 class="mb-3">سایز متوسط</h4>
+
+              <label class="form-label">تعداد</label>
+              <input
+                class="form-control num mb-3"
+                type="number"
+                min="0"
+                name="quantity_medium"
+                value="0"
+              >
+
+              <label class="form-label">قیمت واحد</label>
+              <input
+                class="form-control money"
+                type="number"
+                min="0"
+                name="unit_price_medium"
+                value="100000"
+              >
+            </div>
+          </div>
+        </div>
+
+        <div class="col-12 col-lg-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <h4 class="mb-3">سایز بزرگ</h4>
+
+              <label class="form-label">تعداد</label>
+              <input
+                class="form-control num mb-3"
+                type="number"
+                min="0"
+                name="quantity_large"
+                value="0"
+              >
+
+              <label class="form-label">قیمت واحد</label>
+              <input
+                class="form-control money"
+                type="number"
+                min="0"
+                name="unit_price_large"
+                value="110000"
+              >
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label">مبلغ دریافتی الان</label>
+          <input
+            class="form-control money"
+            type="number"
+            min="0"
+            name="amount_received"
+            value="0"
+          >
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label">نوع دریافت</label>
+          <select class="form-select" name="receipt_type">
+            <option value="deposit">بیعانه</option>
+            <option value="full">تسویه کامل</option>
+            <option value="balance">پرداخت مانده</option>
+          </select>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label">پول را چه کسی دریافت کرد؟</label>
+          <select class="form-select" name="recipient">
+            <option value="samaneh">سمانه</option>
+            <option value="mehr">مهر</option>
+          </select>
+        </div>
+
+        <div class="col-12">
+          <label class="form-label">توضیح</label>
+          <input
+            class="form-control"
+            type="text"
+            name="note"
+            placeholder="اختیاری"
+          >
+        </div>
+
+      </div>
+    </div>
+
+    <div class="card-footer text-end">
+      <button class="btn btn-primary" type="submit">
+        ثبت فروش هولدر
+      </button>
+    </div>
+  </div>
+</form>
+
+
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title mb-0">فروش‌های هولدر این روز</h3>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-vcenter">
+      <thead>
+        <tr>
+          <th>مشتری</th>
+          <th>کوچک</th>
+          <th>متوسط</th>
+          <th>بزرگ</th>
+          <th>جمع سفارش</th>
+          <th>مانده مشتری</th>
+          <th>دریافت‌ها</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for order in holder_orders %}
+          <tr>
+            <td>{{ order.customer_name }}</td>
+            <td class="num">{{ order.quantity_small }}</td>
+            <td class="num">{{ order.quantity_medium }}</td>
+            <td class="num">{{ order.quantity_large }}</td>
+            <td class="money">{{ order.order_total|groupnum }}</td>
+            <td class="money">{{ order.remaining_balance|groupnum }}</td>
+            <td>
+              {% for receipt in order.receipts.all %}
+                <div class="small mb-1">
+                  {{ receipt.amount|groupnum }}
+                  —
+                  {{ receipt.get_recipient_display }}
+                  —
+                  {{ receipt.get_receipt_type_display }}
+                </div>
+              {% empty %}
+                <span class="text-secondary">بدون دریافت</span>
+              {% endfor %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="7" class="text-center text-secondary py-4">
+              هنوز فروش هولدری برای این روز ثبت نشده.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </div>
 
