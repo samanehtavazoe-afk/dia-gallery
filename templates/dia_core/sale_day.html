@@ -273,6 +273,67 @@
 
 {% else %}
 
+{% if mode == "site" %}
+<div class="row g-2 mb-4">
+
+  <div class="col-6 col-xl-2">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-secondary small">فروش ناخالص</div>
+        <strong class="fs-4 money">{{ total.gross|groupnum }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-xl-2">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-secondary small">کل کارمزدها</div>
+        <strong class="fs-4 money">{{ total.platform_fees|groupnum }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-xl-2">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-secondary small">خالص دریافتی / طلب درگاه</div>
+        <strong class="fs-4 money">{{ total.net_receivable|groupnum }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-xl-2">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-secondary small">هزینه پست</div>
+        <strong class="fs-4 money">{{ total.shipping_cost|groupnum }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-xl-2">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-secondary small">بهای کالا</div>
+        <strong class="fs-4 money">{{ total.cogs|groupnum }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-xl-2">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-secondary small">سود فاکتور</div>
+        <strong class="fs-4 money {% if total.profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+          {{ total.profit|groupnum }}
+        </strong>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% else %}
 <div class="row g-2 mb-4">
   <div class="col-6 col-xl-2">
     <div class="card h-100">
@@ -322,6 +383,7 @@
   </div>
 </div>
 
+{% endif %}
 
 <form method="post">
   {% csrf_token %}

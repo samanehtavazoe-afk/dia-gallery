@@ -80,6 +80,8 @@ def _empty_metrics():
         "provider_fee_collected": 0,
         "customer_total": 0,
         "total_fees": 0,
+        "platform_fees": 0,
+        "net_receivable": 0,
         "cogs": 0,
         "profit": 0,
         "quantity": 0,
@@ -131,6 +133,19 @@ def _sum_lines(lines):
         total["gross"]
         + total["shipping_collected"]
         + total["provider_fee_collected"]
+    )
+
+    total["platform_fees"] = (
+        total["digikala_fee"]
+        + total["channel_fee"]
+        + total["channel_tax"]
+        + total["provider_fee"]
+        + total["provider_tax"]
+    )
+
+    total["net_receivable"] = (
+        total["customer_total"]
+        - total["platform_fees"]
     )
 
     total["margin"] = (

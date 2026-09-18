@@ -382,3 +382,70 @@ class SiteMultibusinessSalesTests(TestCase):
             order.provider_fee_collected,
             20000,
         )
+
+    def test_site_summary_shows_financial_breakdown_and_net_receivable(self):
+        from .models import (
+            AppSetting,
+            PaymentProvider,
+            ProductVariant,
+            SaleOrder,
+            StockBalance,
+            StockLocation,
+        )
+
+        digipay = PaymentProvider.objects.create(
+            code="digipay",
+            title="DigiPay",
+            active=True,
+        )
+
+        AppSetting.objects.create(
+            key="digipay_commission_percent",
+            value="10",
+        )
+
+        location = StockLocation.objects.create(
+            key="main",
+            title="انبار اصلی",
+            active=True,
+        )
+
+        variant = ProductVariant.objects.get(product__code="DIA-1")
+
+        StockBalance.objects.create(
+            variant=variant,
+            location=location,
+            qty=10,
+        )
+
+        self.client.post(
+            reverse("sale_day", args=[self.day.id]),
+            {
+                "mode": "site",
+                "payment_provider": str(digipay.id),
+                "shipping_cost": "15000",
+                f"qty_{variant.id}": "2",
+                f"price_{variant.id}": "100000",
+            },
+        )
+
+        order = SaleOrder.objects.get(day=self.day)
+
+        response = self.client.get(
+            reverse("sale_day", args=[self.day.id]),
+            {
+                "mode": "site",
+                "order": order.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        self.assertContains(response, "فروش ناخالص")
+        self.assertContains(response, "کل کارمزدها")
+        self.assertContains(response, "خالص دریافتی / طلب درگاه")
+        self.assertContains(response, "هزینه پست")
+        self.assertContains(response, "بهای کالا")
+        self.assertContains(response, "سود فاکتور")
+
+        self.assertIn("net_receivable", response.context["total"])
