@@ -470,7 +470,7 @@ def sale_day(request, day_id):
 
 
     if request.method == "POST":
-        if selected_business is None:
+        if mode != "site" and selected_business is None:
             raise ValueError("بیزنس را انتخاب کن.")
 
         if selected_channel is None:
@@ -652,10 +652,14 @@ def sale_day(request, day_id):
                     day=day,
                     order=selected_order,
                     variant=variant,
-                    business=selected_business,
+                    business=(
+                        variant.product.business
+                        if mode == "site"
+                        else selected_business
+                    ),
                     sales_channel=selected_channel,
                     payment_provider=selected_provider,
-                    quantity=0,
+                    quantity=qty,
                     sale_price=price,
                     unit_cost_snapshot=int(
                         variant.unit_cost or 0

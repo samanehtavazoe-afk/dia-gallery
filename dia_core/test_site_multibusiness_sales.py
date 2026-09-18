@@ -74,3 +74,79 @@ class SiteMultibusinessSalesTests(TestCase):
         self.assertTrue(
             SaleOrder._meta.get_field("business").null
         )
+
+    def test_site_invoice_can_save_lines_from_multiple_businesses(self):
+        from .models import (
+            ProductVariant,
+            SaleOrder,
+            StockBalance,
+            StockLocation,
+        )
+
+        location = StockLocation.objects.create(
+            key="main",
+            title="انبار اصلی",
+            active=True,
+        )
+
+        dia_variant = ProductVariant.objects.get(product__code="DIA-1")
+        body_variant = ProductVariant.objects.get(product__code="BODY-1")
+
+        StockBalance.objects.create(
+            variant=dia_variant,
+            location=location,
+            qty=100,
+        )
+        StockBalance.objects.create(
+            variant=body_variant,
+            location=location,
+            qty=100,
+        )
+
+        self.client.raise_request_exception = False
+
+        response = self.client.post(
+            reverse("sale_day", args=[self.day.id]),
+            {
+                "mode": "site",
+                "payment_provider": "",
+                "shipping_collected": "0",
+                "shipping_cost": "0",
+                f"qty_{dia_variant.id}": "2",
+                f"price_{dia_variant.id}": "120000",
+                f"qty_{body_variant.id}": "3",
+                f"price_{body_variant.id}": "150000",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        order = SaleOrder.objects.get(day=self.day)
+        self.assertIsNone(order.business)
+
+        lines = {
+            line.variant.product.code: line
+            for line in order.lines.select_related(
+                "variant__product",
+                "business",
+            )
+        }
+
+        self.assertEqual(set(lines), {"DIA-1", "BODY-1"})
+        self.assertEqual(lines["DIA-1"].business, dia_variant.product.business)
+        self.assertEqual(lines["BODY-1"].business, body_variant.product.business)
+
+        self.assertEqual(
+            StockBalance.objects.get(
+                variant=dia_variant,
+                location=location,
+            ).qty,
+            98,
+        )
+        self.assertEqual(
+            StockBalance.objects.get(
+                variant=body_variant,
+                location=location,
+            ).qty,
+            97,
+        )
