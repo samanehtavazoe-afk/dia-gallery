@@ -192,6 +192,89 @@ def sale_metrics(line):
     }
 
 
+
+def _holder_variant_for_bucket(bucket):
+    aliases = {
+        "small": {"s", "small", "کوچک"},
+        "medium": {"m", "medium", "متوسط"},
+        "large": {"l", "large", "بزرگ"},
+    }
+    wanted = aliases[bucket]
+
+    candidates = list(
+        ProductVariant.objects.filter(
+            active=True,
+            product__active=True,
+            product__business__code="holder",
+            size__active=True,
+        )
+        .select_related("product", "size", "color")
+        .order_by("id")
+    )
+
+    matches = [
+        row
+        for row in candidates
+        if (row.size.name or "").strip().lower() in wanted
+    ]
+
+    if len(matches) != 1:
+        raise ValueError(
+            f"برای سایز {bucket} هولدر باید دقیقاً یک واریانت فعال تعریف شده باشد."
+        )
+
+    return matches[0]
+
+
+@transaction.atomic
+def sync_holder_direct_inventory(order):
+    from .models import HolderDirectOrder
+
+    order = HolderDirectOrder.objects.select_for_update().get(pk=order.pk)
+    location = main_location()
+    result = {}
+
+    for bucket in ("small", "medium", "large"):
+        target = max(
+            0,
+            int(getattr(order, f"quantity_{bucket}") or 0),
+        )
+
+        variant = _holder_variant_for_bucket(bucket)
+        reference = f"holder-order:{order.id}:{bucket}"
+
+        moved_total = (
+            InventoryMovement.objects.filter(
+                movement_type=InventoryMovement.SALE,
+                reference=reference,
+            )
+            .aggregate(total=Sum("delta"))["total"]
+            or 0
+        )
+
+        applied = max(0, -int(moved_total))
+        delta = target - applied
+
+        if delta:
+            balance = stock_for(variant, location, lock=True)
+            balance.qty = int(balance.qty or 0) - delta
+            balance.save(update_fields=["qty"])
+
+            InventoryMovement.objects.create(
+                date=order.date,
+                movement_type=InventoryMovement.SALE,
+                variant=variant,
+                location=location,
+                delta=-delta,
+                reference=reference,
+                note=f"فروش مستقیم هولدر - {order.customer_name}",
+            )
+
+        result[bucket] = delta
+
+    return result
+
+
 @transaction.atomic
 def sync_sale_inventory(line):
     line = SaleLine.objects.select_for_update().select_related("variant", "day").get(pk=line.pk)

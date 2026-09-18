@@ -52,6 +52,7 @@ from .services import (
     sale_cost_snapshots,
     sale_metrics,
     stock_for,
+    sync_holder_direct_inventory,
     sync_purchase_inventory,
     sync_sale_inventory,
 )
@@ -284,6 +285,8 @@ def sale_day(request, day_id):
                 order_total=order_total,
                 note=note,
             )
+
+            sync_holder_direct_inventory(order)
 
             amount_received = _int(request.POST.get("amount_received"))
 
