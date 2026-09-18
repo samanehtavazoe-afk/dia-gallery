@@ -110,6 +110,111 @@ class HolderDirectSaleTests(TestCase):
         self.assertEqual(bank.entries.count(), 0)
 
 
+class HolderDirectInventoryTests(TestCase):
+    def setUp(self):
+        self.location = models.StockLocation.objects.create(
+            key="main",
+            title="انبار اصلی",
+        )
+        holder = models.Business.objects.create(code="holder", title="Holder")
+        color = models.Color.objects.create(name="پیش‌فرض")
+        product = models.Product.objects.create(
+            code="HOLDER",
+            title="قالب کفش",
+            business=holder,
+        )
+
+        self.variants = {}
+        for idx, (bucket, size_name) in enumerate(
+            (("small", "S"), ("medium", "M"), ("large", "L")),
+            start=1,
+        ):
+            size = models.Size.objects.create(name=size_name, sort_order=idx)
+            variant = models.ProductVariant.objects.create(
+                product=product,
+                size=size,
+                color=color,
+                default_sale_price=0,
+                unit_cost=0,
+            )
+            models.StockBalance.objects.create(
+                variant=variant,
+                location=self.location,
+                qty=100,
+            )
+            self.variants[bucket] = variant
+
+        self.order = models.HolderDirectOrder.objects.create(
+            date=timezone.localdate(),
+            customer_name="مشتری موجودی",
+            quantity_small=2,
+            quantity_medium=3,
+            quantity_large=4,
+            unit_price_small=90000,
+            unit_price_medium=100000,
+            unit_price_large=110000,
+            order_total=920000,
+        )
+
+    def _sync(self):
+        self.assertTrue(
+            hasattr(services, "sync_holder_direct_inventory"),
+            "sync_holder_direct_inventory must exist",
+        )
+        return services.sync_holder_direct_inventory(self.order)
+
+    def _qty(self, bucket):
+        return models.StockBalance.objects.get(
+            variant=self.variants[bucket],
+            location=self.location,
+        ).qty
+
+    def test_holder_order_reduces_exact_three_size_stocks(self):
+        self._sync()
+
+        self.assertEqual(self._qty("small"), 98)
+        self.assertEqual(self._qty("medium"), 97)
+        self.assertEqual(self._qty("large"), 96)
+        self.assertEqual(
+            models.InventoryMovement.objects.filter(
+                reference=f"holder-order:{self.order.id}:small"
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            models.InventoryMovement.objects.filter(
+                reference=f"holder-order:{self.order.id}:medium"
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            models.InventoryMovement.objects.filter(
+                reference=f"holder-order:{self.order.id}:large"
+            ).count(),
+            1,
+        )
+
+    def test_holder_order_edit_applies_only_quantity_delta(self):
+        self._sync()
+
+        self.order.quantity_small = 5
+        self.order.quantity_medium = 1
+        self.order.quantity_large = 4
+        self.order.save(
+            update_fields=[
+                "quantity_small",
+                "quantity_medium",
+                "quantity_large",
+            ]
+        )
+
+        self._sync()
+
+        self.assertEqual(self._qty("small"), 95)
+        self.assertEqual(self._qty("medium"), 99)
+        self.assertEqual(self._qty("large"), 96)
+
+
 class HolderDirectSaleViewTests(TestCase):
     def setUp(self):
         user = get_user_model().objects.create_user(
