@@ -427,7 +427,9 @@ def sale_day(request, day_id):
         color__active=True,
     )
 
-    if selected_business is not None:
+    if mode == "site":
+        pass
+    elif selected_business is not None:
         variants_qs = variants_qs.filter(
             product__business=selected_business
         )
