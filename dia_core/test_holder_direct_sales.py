@@ -231,6 +231,41 @@ class HolderDirectSaleViewTests(TestCase):
         )
         self.url = reverse("sale_day", args=[self.day.id])
 
+        self.location = models.StockLocation.objects.create(
+            key="main",
+            title="انبار اصلی ویو",
+        )
+        holder = models.Business.objects.create(code="holder", title="Holder View")
+        color = models.Color.objects.create(name="پیش‌فرض ویو")
+        product = models.Product.objects.create(
+            code="HOLDER-VIEW",
+            title="قالب کفش ویو",
+            business=holder,
+        )
+        self.variants = {}
+        for idx, (bucket, size_name) in enumerate(
+            (("small", "S"), ("medium", "M"), ("large", "L")),
+            start=1,
+        ):
+            size = models.Size.objects.create(name=size_name, sort_order=idx)
+            variant = models.ProductVariant.objects.create(
+                product=product,
+                size=size,
+                color=color,
+            )
+            models.StockBalance.objects.create(
+                variant=variant,
+                location=self.location,
+                qty=20,
+            )
+            self.variants[bucket] = variant
+
+    def _stock(self, bucket):
+        return models.StockBalance.objects.get(
+            variant=self.variants[bucket],
+            location=self.location,
+        ).qty
+
     def test_holder_mode_shows_dedicated_persian_size_form(self):
         response = self.client.get(self.url, {"mode": "holder"})
 
@@ -279,3 +314,6 @@ class HolderDirectSaleViewTests(TestCase):
         self.assertEqual(receipt.recipient, "samaneh")
         self.assertEqual(order.remaining_balance, 410000)
         self.assertEqual(services.account_balance(self.bank), 1200000)
+        self.assertEqual(self._stock("small"), 18)
+        self.assertEqual(self._stock("medium"), 19)
+        self.assertEqual(self._stock("large"), 17)
