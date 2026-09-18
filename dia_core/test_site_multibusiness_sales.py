@@ -67,3 +67,10 @@ class SiteMultibusinessSalesTests(TestCase):
         self.assertContains(response, "DIA-1")
         self.assertContains(response, "BODY-1")
         self.assertContains(response, "HOLDER-1")
+
+    def test_site_invoice_can_be_business_neutral(self):
+        from .models import SaleOrder
+
+        self.assertTrue(
+            SaleOrder._meta.get_field("business").null
+        )
