@@ -839,6 +839,21 @@ def sale_day(request, day_id):
             ),
         })
 
+    settlement_rule = ""
+    if (
+        mode == "site"
+        and selected_order is not None
+        and selected_order.payment_provider_id
+    ):
+        settlement_rule = (
+            AppSetting.objects.filter(
+                key=f"{selected_order.payment_provider.code}_settlement_rule"
+            )
+            .values_list("value", flat=True)
+            .first()
+            or ""
+        )
+
     return render(
         request,
         "dia_core/sale_day.html",
@@ -848,6 +863,7 @@ def sale_day(request, day_id):
             "mode": mode,
             "rows": rows,
             "total": total,
+        "settlement_rule": settlement_rule,
             "businesses": businesses,
             "channels": channels,
             "providers": providers,

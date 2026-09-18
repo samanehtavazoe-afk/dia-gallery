@@ -385,6 +385,13 @@
 
 {% endif %}
 
+{% if mode == "site" and settlement_rule %}
+<div class="alert alert-info mb-3">
+  <strong>قاعده تسویه:</strong>
+  {{ settlement_rule }}
+</div>
+{% endif %}
+
 <form method="post">
   {% csrf_token %}
   <input type="hidden" name="mode" value="{{ mode }}">

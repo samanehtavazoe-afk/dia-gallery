@@ -449,3 +449,40 @@ class SiteMultibusinessSalesTests(TestCase):
         self.assertContains(response, "سود فاکتور")
 
         self.assertIn("net_receivable", response.context["total"])
+
+    def test_site_invoice_shows_provider_settlement_rule(self):
+        from .models import AppSetting, PaymentProvider, SaleOrder
+
+        digipay = PaymentProvider.objects.create(
+            code="digipay",
+            title="DigiPay Settlement",
+            active=True,
+        )
+
+        AppSetting.objects.create(
+            key="digipay_settlement_rule",
+            value="تسویه روز ۷ هر ماه",
+            label="قاعده تسویه دیجی‌پی",
+        )
+
+        response = self.client.post(
+            reverse("sale_day", args=[self.day.id]),
+            {
+                "mode": "site",
+                "payment_provider": str(digipay.id),
+            },
+        )
+
+        order = SaleOrder.objects.get(day=self.day)
+
+        response = self.client.get(
+            reverse("sale_day", args=[self.day.id]),
+            {
+                "mode": "site",
+                "order": order.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "قاعده تسویه")
+        self.assertContains(response, "تسویه روز ۷ هر ماه")
