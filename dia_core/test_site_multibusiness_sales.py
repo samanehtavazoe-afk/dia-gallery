@@ -179,3 +179,96 @@ class SiteMultibusinessSalesTests(TestCase):
         self.assertNotContains(response, 'name="settled_date"')
         self.assertNotContains(response, 'name="shipping_collected"')
         self.assertNotContains(response, 'name="provider_fee_collected"')
+
+    def test_editing_site_invoice_preserves_line_businesses_and_adjusts_stock(self):
+        from .models import (
+            ProductVariant,
+            SaleOrder,
+            StockBalance,
+            StockLocation,
+        )
+
+        location = StockLocation.objects.create(
+            key="main",
+            title="انبار اصلی",
+            active=True,
+        )
+
+        dia_variant = ProductVariant.objects.get(product__code="DIA-1")
+        body_variant = ProductVariant.objects.get(product__code="BODY-1")
+
+        StockBalance.objects.create(
+            variant=dia_variant,
+            location=location,
+            qty=100,
+        )
+        StockBalance.objects.create(
+            variant=body_variant,
+            location=location,
+            qty=100,
+        )
+
+        create_response = self.client.post(
+            reverse("sale_day", args=[self.day.id]),
+            {
+                "mode": "site",
+                "payment_provider": "",
+                "shipping_cost": "0",
+                f"qty_{dia_variant.id}": "2",
+                f"price_{dia_variant.id}": "120000",
+                f"qty_{body_variant.id}": "3",
+                f"price_{body_variant.id}": "150000",
+            },
+        )
+        self.assertEqual(create_response.status_code, 302)
+
+        order = SaleOrder.objects.get(day=self.day)
+
+        self.client.raise_request_exception = False
+
+        edit_response = self.client.post(
+            reverse("sale_day", args=[self.day.id]),
+            {
+                "mode": "site",
+                "order_id": str(order.id),
+                "payment_provider": "",
+                "shipping_cost": "0",
+                f"qty_{dia_variant.id}": "5",
+                f"price_{dia_variant.id}": "125000",
+                f"qty_{body_variant.id}": "1",
+                f"price_{body_variant.id}": "155000",
+            },
+        )
+
+        self.assertEqual(edit_response.status_code, 302)
+
+        order.refresh_from_db()
+        self.assertIsNone(order.business)
+
+        lines = {
+            line.variant.product.code: line
+            for line in order.lines.select_related(
+                "variant__product__business",
+                "business",
+            )
+        }
+
+        self.assertEqual(lines["DIA-1"].business, dia_variant.product.business)
+        self.assertEqual(lines["BODY-1"].business, body_variant.product.business)
+        self.assertEqual(lines["DIA-1"].quantity, 5)
+        self.assertEqual(lines["BODY-1"].quantity, 1)
+
+        self.assertEqual(
+            StockBalance.objects.get(
+                variant=dia_variant,
+                location=location,
+            ).qty,
+            95,
+        )
+        self.assertEqual(
+            StockBalance.objects.get(
+                variant=body_variant,
+                location=location,
+            ).qty,
+            99,
+        )

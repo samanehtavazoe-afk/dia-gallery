@@ -356,15 +356,18 @@ def sale_day(request, day_id):
     selected_order = None
     if order_id:
         order_qs = SaleOrder.objects.filter(day=day)
+
         if request.method == "POST":
             order_qs = order_qs.select_for_update()
-
-        selected_order = get_object_or_404(
-            order_qs.select_related(
+        else:
+            order_qs = order_qs.select_related(
                 "business",
                 "sales_channel",
                 "payment_provider",
-            ),
+            )
+
+        selected_order = get_object_or_404(
+            order_qs,
             id=order_id,
         )
 
@@ -477,7 +480,8 @@ def sale_day(request, day_id):
             raise ValueError("کانال فروش را انتخاب کن.")
 
         if (
-            selected_order
+            mode != "site"
+            and selected_order
             and selected_order.lines.exists()
             and selected_order.business_id != selected_business.id
         ):
@@ -674,7 +678,11 @@ def sale_day(request, day_id):
 
                 current.quantity = qty
                 current.sale_price = price
-                current.business = selected_business
+                current.business = (
+                    variant.product.business
+                    if mode == "site"
+                    else selected_business
+                )
                 current.sales_channel = selected_channel
                 current.payment_provider = selected_provider
 
