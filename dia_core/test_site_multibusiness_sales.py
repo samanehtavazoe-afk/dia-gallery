@@ -150,3 +150,32 @@ class SiteMultibusinessSalesTests(TestCase):
             ).qty,
             97,
         )
+
+    def test_site_mode_renders_simplified_sales_form(self):
+        business = Business.objects.get(code="dia-1")
+        business.title = "برند DIA"
+        business.save(update_fields=["title"])
+
+        response = self.client.get(
+            reverse("sale_day", args=[self.day.id]),
+            {"mode": "site"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        # چیزهایی که باید باشند
+        self.assertContains(response, 'name="payment_provider"')
+        self.assertContains(response, 'name="shipping_cost"')
+        self.assertContains(response, "برند DIA")
+        self.assertContains(response, 'name="qty_')
+        self.assertContains(response, 'name="price_')
+
+        # چیزهای اضافی که در فروش سایت نباید دیده شوند
+        self.assertNotContains(response, 'name="business"')
+        self.assertNotContains(response, 'name="sales_channel"')
+        self.assertNotContains(response, 'name="payment_status"')
+        self.assertNotContains(response, 'name="external_reference"')
+        self.assertNotContains(response, 'name="expected_settlement_date"')
+        self.assertNotContains(response, 'name="settled_date"')
+        self.assertNotContains(response, 'name="shipping_collected"')
+        self.assertNotContains(response, 'name="provider_fee_collected"')

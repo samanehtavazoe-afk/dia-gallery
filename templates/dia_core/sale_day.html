@@ -350,6 +350,7 @@
     <div class="card-body">
       <div class="row g-3">
 
+        {% if mode != "site" %}
         <div class="col-md-4">
           <label class="form-label">بیزنس</label>
           <select class="form-select" name="business" id="businessSelect" required>
@@ -379,6 +380,7 @@
             {% endfor %}
           </select>
         </div>
+        {% endif %}
 
         {% if mode == "site" %}
         <div class="col-md-4">
@@ -397,7 +399,8 @@
         </div>
         {% endif %}
 
-        <div class="col-md-4">
+        {% if mode != "site" %}
+<div class="col-md-4">
           <label class="form-label">وضعیت پول</label>
           <select class="form-select" name="payment_status">
             {% for value, label in payment_status_choices %}
@@ -410,8 +413,10 @@
             {% endfor %}
           </select>
         </div>
+{% endif %}
 
-        <div class="col-md-4">
+        {% if mode != "site" %}
+<div class="col-md-4">
           <label class="form-label">شماره سفارش / مرجع</label>
           <input
             class="form-control"
@@ -421,8 +426,10 @@
             placeholder="اختیاری"
           >
         </div>
+{% endif %}
 
-        <div class="col-md-4">
+        {% if mode != "site" %}
+<div class="col-md-4">
           <label class="form-label">تاریخ تسویه مورد انتظار</label>
           <input
             class="form-control"
@@ -432,8 +439,10 @@
             placeholder="1405/07/07"
           >
         </div>
+{% endif %}
 
-        <div class="col-md-4">
+        {% if mode != "site" %}
+<div class="col-md-4">
           <label class="form-label">تاریخ تسویه واقعی</label>
           <input
             class="form-control"
@@ -443,8 +452,10 @@
             placeholder="1405/07/07"
           >
         </div>
+{% endif %}
 
-        <div class="col-md-4">
+        {% if mode != "site" %}
+<div class="col-md-4">
           <label class="form-label">هزینه ارسال گرفته‌شده از مشتری</label>
           <input
             class="form-control money"
@@ -454,9 +465,10 @@
             value="{% if selected_order %}{{ selected_order.shipping_collected }}{% else %}0{% endif %}"
           >
         </div>
+{% endif %}
 
         <div class="col-md-4">
-          <label class="form-label">هزینه واقعی ارسال</label>
+          <label class="form-label">هزینه پست / ارسال</label>
           <input
             class="form-control money"
             type="number"
@@ -466,7 +478,8 @@
           >
         </div>
 
-        <div class="col-md-4">
+        {% if mode != "site" %}
+<div class="col-md-4">
           <label class="form-label">کارمزد اضافه گرفته‌شده از مشتری</label>
           <input
             class="form-control money"
@@ -479,6 +492,7 @@
           <div class="form-hint text-secondary">
             مخصوص Snapp / DigiPay / TorobPay و روش‌های مشابه
           </div>
+{% endif %}
         </div>
 
         <div class="col-md-8">
@@ -529,6 +543,11 @@
                 {% if row.variant.product.title %}
                   <div class="text-secondary small">
                     {{ row.variant.product.title }}
+                  </div>
+                {% endif %}
+                {% if mode == "site" and row.variant.product.business %}
+                  <div class="text-secondary small">
+                    برند: {{ row.variant.product.business.title }}
                   </div>
                 {% endif %}
               </td>
