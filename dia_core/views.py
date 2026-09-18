@@ -213,13 +213,15 @@ def sale_calendar(request):
             ),
         ).prefetch_related("lines")
     }
-    day_meta = {}
+    day_meta = cal["day_meta"]
+    for day_num, meta in day_meta.items():
+        meta["has_sales"] = False
+
     for day_num, row in existing.items():
-        day_meta[day_num] = {
+        day_meta[day_num].update({
             "id": row.id,
             "has_sales": any(int(line.quantity or 0) > 0 for line in row.lines.all()),
-        }
-    cal["day_meta"] = day_meta
+        })
     return render(request, "dia_core/sales_calendar.html", cal)
 
 
