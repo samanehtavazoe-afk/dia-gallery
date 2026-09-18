@@ -286,7 +286,15 @@ def sync_sale_inventory(line):
 
     location = main_location()
     balance = stock_for(line.variant, location, lock=True)
-    balance.qty = int(balance.qty or 0) - delta
+
+    available = int(balance.qty or 0)
+    if delta > 0 and delta > available:
+        raise ValueError(
+            f"موجودی کافی برای {line.variant} نیست. "
+            f"موجودی فعلی: {available}"
+        )
+
+    balance.qty = available - delta
     balance.save(update_fields=["qty"])
     InventoryMovement.objects.create(
         date=line.day.date,

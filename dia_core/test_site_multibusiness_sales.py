@@ -272,3 +272,44 @@ class SiteMultibusinessSalesTests(TestCase):
             ).qty,
             99,
         )
+
+    def test_site_sale_rejects_quantity_above_available_stock(self):
+        from .models import (
+            ProductVariant,
+            SaleOrder,
+            StockBalance,
+            StockLocation,
+        )
+
+        location = StockLocation.objects.create(
+            key="main",
+            title="انبار اصلی",
+            active=True,
+        )
+
+        variant = ProductVariant.objects.get(product__code="DIA-1")
+
+        balance = StockBalance.objects.create(
+            variant=variant,
+            location=location,
+            qty=2,
+        )
+
+        with self.assertRaises(ValueError):
+            self.client.post(
+                reverse("sale_day", args=[self.day.id]),
+                {
+                    "mode": "site",
+                    "payment_provider": "",
+                    "shipping_cost": "0",
+                    f"qty_{variant.id}": "5",
+                    f"price_{variant.id}": "120000",
+                },
+            )
+
+        balance.refresh_from_db()
+        self.assertEqual(balance.qty, 2)
+
+        self.assertFalse(
+            SaleOrder.objects.filter(day=self.day).exists()
+        )
