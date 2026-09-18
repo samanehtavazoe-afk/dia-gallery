@@ -80,6 +80,16 @@ class DailySalesModeConstraintTests(TestCase):
         self.assertContains(response, 'name="payment_provider"')
         self.assertNotContains(response, "Other Provider")
 
+    def test_generic_mode_form_posts_selected_mode_back(self):
+        for mode in ("digikala", "site", "basalam"):
+            with self.subTest(mode=mode):
+                response = self._get(mode)
+                self.assertContains(
+                    response,
+                    f'<input type="hidden" name="mode" value="{mode}">',
+                    html=True,
+                )
+
     def test_holder_mode_does_not_render_generic_invoice_editor(self):
         response = self._get("holder")
 
