@@ -325,6 +325,7 @@
 
 <form method="post">
   {% csrf_token %}
+  <input type="hidden" name="mode" value="{{ mode }}">
 
   {% if selected_order %}
     <input type="hidden" name="order_id" value="{{ selected_order.id }}">
