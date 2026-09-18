@@ -313,3 +313,72 @@ class SiteMultibusinessSalesTests(TestCase):
         self.assertFalse(
             SaleOrder.objects.filter(day=self.day).exists()
         )
+
+    def test_site_digipay_fee_and_payment_status_are_automatic(self):
+        from .models import (
+            AppSetting,
+            PaymentProvider,
+            ProductVariant,
+            SaleOrder,
+            StockBalance,
+            StockLocation,
+        )
+
+        digipay = PaymentProvider.objects.create(
+            code="digipay",
+            title="DigiPay",
+            active=True,
+        )
+
+        AppSetting.objects.create(
+            key="digipay_commission_percent",
+            value="10",
+        )
+
+        location = StockLocation.objects.create(
+            key="main",
+            title="انبار اصلی",
+            active=True,
+        )
+
+        variant = ProductVariant.objects.get(product__code="DIA-1")
+
+        StockBalance.objects.create(
+            variant=variant,
+            location=location,
+            qty=10,
+        )
+
+        response = self.client.post(
+            reverse("sale_day", args=[self.day.id]),
+            {
+                "mode": "site",
+                "payment_provider": str(digipay.id),
+                "shipping_cost": "0",
+                f"qty_{variant.id}": "2",
+                f"price_{variant.id}": "100000",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        order = SaleOrder.objects.get(day=self.day)
+        line = order.lines.get(variant=variant)
+
+        self.assertEqual(order.payment_provider, digipay)
+        self.assertEqual(
+            order.payment_status,
+            SaleOrder.PaymentStatus.PENDING,
+        )
+
+        # 10% of 100,000
+        self.assertEqual(
+            line.provider_fee_unit_snapshot,
+            10000,
+        )
+
+        # 2 items × 10,000 fee
+        self.assertEqual(
+            order.provider_fee_collected,
+            20000,
+        )
