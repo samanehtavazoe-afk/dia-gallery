@@ -80,6 +80,8 @@ def _empty_metrics():
         "provider_fee_collected": 0,
         "customer_total": 0,
         "total_fees": 0,
+        "platform_fees": 0,
+        "net_receivable": 0,
         "cogs": 0,
         "profit": 0,
         "quantity": 0,
@@ -131,6 +133,19 @@ def _sum_lines(lines):
         total["gross"]
         + total["shipping_collected"]
         + total["provider_fee_collected"]
+    )
+
+    total["platform_fees"] = (
+        total["digikala_fee"]
+        + total["channel_fee"]
+        + total["channel_tax"]
+        + total["provider_fee"]
+        + total["provider_tax"]
+    )
+
+    total["net_receivable"] = (
+        total["customer_total"]
+        - total["platform_fees"]
     )
 
     total["margin"] = (
@@ -356,15 +371,18 @@ def sale_day(request, day_id):
     selected_order = None
     if order_id:
         order_qs = SaleOrder.objects.filter(day=day)
+
         if request.method == "POST":
             order_qs = order_qs.select_for_update()
-
-        selected_order = get_object_or_404(
-            order_qs.select_related(
+        else:
+            order_qs = order_qs.select_related(
                 "business",
                 "sales_channel",
                 "payment_provider",
-            ),
+            )
+
+        selected_order = get_object_or_404(
+            order_qs,
             id=order_id,
         )
 
@@ -427,7 +445,9 @@ def sale_day(request, day_id):
         color__active=True,
     )
 
-    if selected_business is not None:
+    if mode == "site":
+        pass
+    elif selected_business is not None:
         variants_qs = variants_qs.filter(
             product__business=selected_business
         )
@@ -468,14 +488,15 @@ def sale_day(request, day_id):
 
 
     if request.method == "POST":
-        if selected_business is None:
+        if mode != "site" and selected_business is None:
             raise ValueError("بیزنس را انتخاب کن.")
 
         if selected_channel is None:
             raise ValueError("کانال فروش را انتخاب کن.")
 
         if (
-            selected_order
+            mode != "site"
+            and selected_order
             and selected_order.lines.exists()
             and selected_order.business_id != selected_business.id
         ):
@@ -650,10 +671,14 @@ def sale_day(request, day_id):
                     day=day,
                     order=selected_order,
                     variant=variant,
-                    business=selected_business,
+                    business=(
+                        variant.product.business
+                        if mode == "site"
+                        else selected_business
+                    ),
                     sales_channel=selected_channel,
                     payment_provider=selected_provider,
-                    quantity=0,
+                    quantity=qty,
                     sale_price=price,
                     unit_cost_snapshot=int(
                         variant.unit_cost or 0
@@ -668,7 +693,11 @@ def sale_day(request, day_id):
 
                 current.quantity = qty
                 current.sale_price = price
-                current.business = selected_business
+                current.business = (
+                    variant.product.business
+                    if mode == "site"
+                    else selected_business
+                )
                 current.sales_channel = selected_channel
                 current.payment_provider = selected_provider
 
@@ -810,6 +839,21 @@ def sale_day(request, day_id):
             ),
         })
 
+    settlement_rule = ""
+    if (
+        mode == "site"
+        and selected_order is not None
+        and selected_order.payment_provider_id
+    ):
+        settlement_rule = (
+            AppSetting.objects.filter(
+                key=f"{selected_order.payment_provider.code}_settlement_rule"
+            )
+            .values_list("value", flat=True)
+            .first()
+            or ""
+        )
+
     return render(
         request,
         "dia_core/sale_day.html",
@@ -819,6 +863,7 @@ def sale_day(request, day_id):
             "mode": mode,
             "rows": rows,
             "total": total,
+        "settlement_rule": settlement_rule,
             "businesses": businesses,
             "channels": channels,
             "providers": providers,

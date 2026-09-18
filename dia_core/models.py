@@ -208,6 +208,8 @@ class SaleOrder(models.Model):
         Business,
         on_delete=models.PROTECT,
         related_name="sale_orders",
+        null=True,
+        blank=True,
     )
     sales_channel = models.ForeignKey(
         SalesChannel,
