@@ -489,7 +489,7 @@
         </div>
         {% endif %}
 
-        {% if mode != "site" %}
+        {% if mode != "site" and mode != "basalam" %}
 <div class="col-md-4">
           <label class="form-label">وضعیت پول</label>
           <select class="form-select" name="payment_status">
@@ -518,7 +518,7 @@
         </div>
 {% endif %}
 
-        {% if mode != "site" %}
+        {% if mode != "site" and mode != "basalam" %}
 <div class="col-md-4">
           <label class="form-label">تاریخ تسویه مورد انتظار</label>
           <input
@@ -531,7 +531,7 @@
         </div>
 {% endif %}
 
-        {% if mode != "site" %}
+        {% if mode != "site" and mode != "basalam" %}
 <div class="col-md-4">
           <label class="form-label">تاریخ تسویه واقعی</label>
           <input
@@ -568,7 +568,7 @@
           >
         </div>
 
-        {% if mode != "site" %}
+        {% if mode != "site" and mode != "basalam" %}
 <div class="col-md-4">
           <label class="form-label">کارمزد اضافه گرفته‌شده از مشتری</label>
           <input

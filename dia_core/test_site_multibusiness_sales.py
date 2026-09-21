@@ -635,6 +635,27 @@ class SiteMultibusinessSalesTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, 'name="business"')
 
+    def test_basalam_form_hides_settlement_and_provider_fields_but_keeps_shipping(self):
+        SalesChannel.objects.get_or_create(
+            code="basalam",
+            defaults={"title": "باسلام", "active": True},
+        )
+
+        response = self.client.get(
+            reverse("sale_day", args=[self.day.id]),
+            {"mode": "basalam"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        self.assertNotContains(response, 'name="payment_status"')
+        self.assertNotContains(response, 'name="expected_settlement_date"')
+        self.assertNotContains(response, 'name="settled_date"')
+        self.assertNotContains(response, 'name="provider_fee_collected"')
+
+        self.assertContains(response, 'name="shipping_collected"')
+        self.assertContains(response, 'name="shipping_cost"')
+
     def test_basalam_invoice_saves_installment_payment_type(self):
         from .models import (
             ProductVariant,
