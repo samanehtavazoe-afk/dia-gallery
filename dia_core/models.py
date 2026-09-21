@@ -199,6 +199,10 @@ class SaleOrder(models.Model):
         SETTLED = "settled", "تسویه شده"
         CANCELLED = "cancelled", "لغو / مرجوع"
 
+    class BasalamPaymentType(models.TextChoices):
+        CASH = "cash", "نقدی"
+        INSTALLMENT = "installment", "اقساطی"
+
     day = models.ForeignKey(
         SaleDay,
         on_delete=models.CASCADE,
@@ -229,6 +233,16 @@ class SaleOrder(models.Model):
         default=PaymentStatus.RECEIVED,
         db_index=True,
     )
+    basalam_payment_type = models.CharField(
+        max_length=20,
+        choices=BasalamPaymentType.choices,
+        default=BasalamPaymentType.CASH,
+    )
+    basalam_down_payment = models.PositiveBigIntegerField(default=0)
+    basalam_installment_count = models.PositiveIntegerField(default=0)
+    basalam_installment_amount = models.PositiveBigIntegerField(default=0)
+    basalam_price_increase = models.PositiveBigIntegerField(default=0)
+    basalam_total_payable = models.PositiveBigIntegerField(default=0)
     external_reference = models.CharField(
         max_length=140,
         blank=True,
@@ -260,6 +274,8 @@ class SaleLine(models.Model):
     quantity = models.PositiveIntegerField(default=0)
     inventory_applied_quantity = models.PositiveIntegerField(default=0)
     sale_price = models.PositiveBigIntegerField(default=0)
+    base_sale_price = models.PositiveBigIntegerField(default=0)
+    basalam_installment_increase = models.PositiveBigIntegerField(default=0)
     unit_cost_snapshot = models.PositiveBigIntegerField(default=0)
     digikala_fee_unit = models.PositiveBigIntegerField(default=0)
     business = models.ForeignKey(
@@ -284,6 +300,7 @@ class SaleLine(models.Model):
         blank=True,
     )
     channel_fee_unit_snapshot = models.PositiveBigIntegerField(default=0)
+    channel_fee_total_snapshot = models.PositiveBigIntegerField(default=0)
     channel_tax_unit_snapshot = models.PositiveBigIntegerField(default=0)
     provider_fee_unit_snapshot = models.PositiveBigIntegerField(default=0)
     provider_tax_unit_snapshot = models.PositiveBigIntegerField(default=0)

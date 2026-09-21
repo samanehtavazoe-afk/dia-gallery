@@ -67,6 +67,63 @@ def percent_fee_for_unit(sale_price, percent):
     return _round_toman(price * rate)
 
 
+
+def basalam_installment_plan(amount):
+    amount = Decimal(amount or 0)
+
+    down_percent = _setting_decimal(
+        "basalam_installment_down_payment_percent",
+        Decimal("25"),
+    )
+    monthly_percent = _setting_decimal(
+        "basalam_installment_monthly_percent",
+        Decimal("3.5"),
+    )
+    installment_count = int(
+        _setting_decimal(
+            "basalam_installment_count",
+            Decimal("2"),
+        )
+    )
+
+    down_payment = _round_toman(
+        amount * down_percent / Decimal("100")
+    )
+    financed_amount = int(amount) - down_payment
+
+    if installment_count <= 0:
+        raise ValueError("تعداد اقساط باسلام باید بیشتر از صفر باشد.")
+
+    monthly_rate = monthly_percent / Decimal("100")
+
+    if monthly_rate == 0:
+        installment_amount = _round_toman(
+            Decimal(financed_amount) / installment_count
+        )
+    else:
+        factor = (Decimal("1") + monthly_rate) ** installment_count
+        installment_amount = _round_toman(
+            Decimal(financed_amount)
+            * monthly_rate
+            * factor
+            / (factor - Decimal("1"))
+        )
+
+    installments_total = installment_amount * installment_count
+    total_payable = down_payment + installments_total
+
+    return {
+        "down_payment": down_payment,
+        "financed_amount": financed_amount,
+        "installment_count": installment_count,
+        "installment_amount": installment_amount,
+        "installments_total": installments_total,
+        "total_payable": total_payable,
+        "price_increase": total_payable - int(amount),
+    }
+
+
+
 def sale_cost_snapshots(*, sale_price, variant, sales_channel=None, payment_provider=None):
     digikala_fee = 0
     channel_fee = 0
@@ -158,10 +215,10 @@ def stock_for(variant, location=None, *, lock=False):
 
 def sale_metrics(line):
     qty = int(line.quantity or 0)
-    gross = qty * int(line.sale_price or 0)
+    gross = qty * int(line.sale_price or 0) + int(line.basalam_installment_increase or 0)
 
     digikala_fee = qty * int(line.digikala_fee_unit or 0)
-    channel_fee = qty * int(line.channel_fee_unit_snapshot or 0)
+    channel_fee = int(line.channel_fee_total_snapshot or 0) or qty * int(line.channel_fee_unit_snapshot or 0)
     channel_tax = qty * int(line.channel_tax_unit_snapshot or 0)
     provider_fee = qty * int(line.provider_fee_unit_snapshot or 0)
     provider_tax = qty * int(line.provider_tax_unit_snapshot or 0)
@@ -590,9 +647,9 @@ def platform_receivable_totals():
         for line in order.lines.all():
             qty = int(line.quantity or 0)
 
-            amount += qty * int(line.sale_price or 0)
+            amount += qty * int(line.sale_price or 0) + int(line.basalam_installment_increase or 0)
             amount -= qty * int(line.digikala_fee_unit or 0)
-            amount -= qty * int(line.channel_fee_unit_snapshot or 0)
+            amount -= int(line.channel_fee_total_snapshot or 0) or qty * int(line.channel_fee_unit_snapshot or 0)
             amount -= qty * int(line.channel_tax_unit_snapshot or 0)
             amount -= qty * int(line.provider_fee_unit_snapshot or 0)
             amount -= qty * int(line.provider_tax_unit_snapshot or 0)
@@ -663,3 +720,152 @@ def record_holder_receipt(
         )
 
     return receipt
+
+def apply_basalam_installment_pricing(order):
+    channel_code = (
+        (order.sales_channel.code or "").strip().lower()
+        if order.sales_channel
+        else ""
+    )
+
+    if channel_code != "basalam":
+        return
+
+    lines = list(
+        order.lines.select_related(
+            "variant__product__business",
+            "sales_channel",
+            "payment_provider",
+        ).order_by("id")
+    )
+
+    if order.basalam_payment_type != "installment":
+        order.basalam_down_payment = 0
+        order.basalam_installment_count = 0
+        order.basalam_installment_amount = 0
+        order.basalam_price_increase = 0
+        order.basalam_total_payable = 0
+        order.save(update_fields=[
+            "basalam_down_payment",
+            "basalam_installment_count",
+            "basalam_installment_amount",
+            "basalam_price_increase",
+            "basalam_total_payable",
+            "updated_at",
+        ])
+        for line in lines:
+            qty = int(line.quantity or 0)
+            base_price = int(line.base_sale_price or line.sale_price or 0)
+
+            line.basalam_installment_increase = 0
+
+            snapshots = sale_cost_snapshots(
+                sale_price=base_price,
+                variant=line.variant,
+                sales_channel=line.sales_channel,
+                payment_provider=line.payment_provider,
+            )
+            for key, value in snapshots.items():
+                setattr(line, key, value)
+
+            total_snapshots = sale_cost_snapshots(
+                sale_price=qty * base_price,
+                variant=line.variant,
+                sales_channel=line.sales_channel,
+                payment_provider=line.payment_provider,
+            )
+            line.channel_fee_total_snapshot = total_snapshots["channel_fee_unit_snapshot"]
+
+            line.save(update_fields=[
+                "basalam_installment_increase",
+                "digikala_fee_unit",
+                "channel_fee_unit_snapshot",
+                "channel_fee_total_snapshot",
+                "channel_tax_unit_snapshot",
+                "provider_fee_unit_snapshot",
+                "provider_tax_unit_snapshot",
+                "updated_at",
+            ])
+
+        return
+
+    base_total = sum(
+        int(line.quantity or 0)
+        * int(line.base_sale_price or line.sale_price or 0)
+        for line in lines
+    )
+
+    plan = basalam_installment_plan(base_total)
+
+    order.basalam_down_payment = plan["down_payment"]
+    order.basalam_installment_count = plan["installment_count"]
+    order.basalam_installment_amount = plan["installment_amount"]
+    order.basalam_price_increase = plan["price_increase"]
+    order.basalam_total_payable = plan["total_payable"]
+    order.save(update_fields=[
+        "basalam_down_payment",
+        "basalam_installment_count",
+        "basalam_installment_amount",
+        "basalam_price_increase",
+        "basalam_total_payable",
+        "updated_at",
+    ])
+
+    remaining = plan["price_increase"]
+
+    for index, line in enumerate(lines):
+        qty = int(line.quantity or 0)
+        base_line_total = qty * int(
+            line.base_sale_price or line.sale_price or 0
+        )
+
+        if index == len(lines) - 1:
+            increase = remaining
+        elif base_total > 0:
+            increase = _round_toman(
+                Decimal(plan["price_increase"])
+                * Decimal(base_line_total)
+                / Decimal(base_total)
+            )
+            remaining -= increase
+        else:
+            increase = 0
+
+        line.basalam_installment_increase = max(0, increase)
+
+        final_line_total = (
+            base_line_total
+            + line.basalam_installment_increase
+        )
+
+        if qty > 0:
+            effective_unit_price = (
+                Decimal(final_line_total) / Decimal(qty)
+            )
+            snapshots = sale_cost_snapshots(
+                sale_price=effective_unit_price,
+                variant=line.variant,
+                sales_channel=line.sales_channel,
+                payment_provider=line.payment_provider,
+            )
+
+            for key, value in snapshots.items():
+                setattr(line, key, value)
+        total_snapshots = sale_cost_snapshots(
+            sale_price=final_line_total,
+            variant=line.variant,
+            sales_channel=line.sales_channel,
+            payment_provider=line.payment_provider,
+        )
+        line.channel_fee_total_snapshot = total_snapshots["channel_fee_unit_snapshot"]
+
+        line.save(update_fields=[
+            "basalam_installment_increase",
+            "digikala_fee_unit",
+            "channel_fee_unit_snapshot",
+            "channel_fee_total_snapshot",
+            "channel_tax_unit_snapshot",
+            "provider_fee_unit_snapshot",
+            "provider_tax_unit_snapshot",
+            "updated_at",
+        ])

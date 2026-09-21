@@ -37,6 +37,7 @@ from .models import (
 )
 from .services import (
     account_balance,
+    apply_basalam_installment_pricing,
     business_transfer_position,
     counterparty_position,
     create_counterparty_receivable,
@@ -445,7 +446,7 @@ def sale_day(request, day_id):
         color__active=True,
     )
 
-    if mode == "site":
+    if mode in {"site", "basalam"}:
         pass
     elif selected_business is not None:
         variants_qs = variants_qs.filter(
@@ -488,14 +489,14 @@ def sale_day(request, day_id):
 
 
     if request.method == "POST":
-        if mode != "site" and selected_business is None:
+        if mode not in {"site", "basalam"} and selected_business is None:
             raise ValueError("بیزنس را انتخاب کن.")
 
         if selected_channel is None:
             raise ValueError("کانال فروش را انتخاب کن.")
 
         if (
-            mode != "site"
+            mode not in {"site", "basalam"}
             and selected_order
             and selected_order.lines.exists()
             and selected_order.business_id != selected_business.id
@@ -508,6 +509,15 @@ def sale_day(request, day_id):
             sales_channel=selected_channel,
             payment_provider=selected_provider,
         )
+
+        basalam_payment_type = (
+            request.POST.get("basalam_payment_type")
+            or (
+                selected_order.basalam_payment_type
+                if selected_order
+                else SaleOrder.BasalamPaymentType.CASH
+            )
+        ).strip()
 
         payment_status = (
             request.POST.get("payment_status")
@@ -581,6 +591,7 @@ def sale_day(request, day_id):
                 sales_channel=selected_channel,
                 payment_provider=selected_provider,
                 payment_status=payment_status,
+                basalam_payment_type=basalam_payment_type,
                 external_reference=external_reference,
                 shipping_collected=shipping_collected,
                 shipping_cost=shipping_cost,
@@ -605,6 +616,7 @@ def sale_day(request, day_id):
             selected_order.sales_channel = selected_channel
             selected_order.payment_provider = selected_provider
             selected_order.payment_status = payment_status
+            selected_order.basalam_payment_type = basalam_payment_type
             selected_order.external_reference = external_reference
             selected_order.shipping_collected = shipping_collected
             selected_order.shipping_cost = shipping_cost
@@ -618,6 +630,7 @@ def sale_day(request, day_id):
                     "sales_channel",
                     "payment_provider",
                     "payment_status",
+                    "basalam_payment_type",
                     "external_reference",
                     "shipping_collected",
                     "shipping_cost",
@@ -673,13 +686,14 @@ def sale_day(request, day_id):
                     variant=variant,
                     business=(
                         variant.product.business
-                        if mode == "site"
+                        if mode in {"site", "basalam"}
                         else selected_business
                     ),
                     sales_channel=selected_channel,
                     payment_provider=selected_provider,
                     quantity=qty,
                     sale_price=price,
+                    base_sale_price=price,
                     unit_cost_snapshot=int(
                         variant.unit_cost or 0
                     ),
@@ -695,7 +709,7 @@ def sale_day(request, day_id):
                 current.sale_price = price
                 current.business = (
                     variant.product.business
-                    if mode == "site"
+                    if mode in {"site", "basalam"}
                     else selected_business
                 )
                 current.sales_channel = selected_channel
@@ -744,6 +758,8 @@ def sale_day(request, day_id):
 
             sync_sale_inventory(current)
             changed += 1
+
+        apply_basalam_installment_pricing(selected_order)
 
         if provider_collected_raw in (None, ""):
             auto_provider_collected = 0

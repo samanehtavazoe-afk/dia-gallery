@@ -486,3 +486,612 @@ class SiteMultibusinessSalesTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "قاعده تسویه")
         self.assertContains(response, "تسویه روز ۷ هر ماه")
+
+    def test_basalam_mode_shows_products_from_all_businesses(self):
+        SalesChannel.objects.create(
+            code="basalam",
+            title="باسلام",
+            active=True,
+        )
+
+        response = self.client.get(
+            reverse("sale_day", args=[self.day.id]),
+            {"mode": "basalam"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "DIA-1")
+        self.assertContains(response, "BODY-1")
+        self.assertContains(response, "HOLDER-1")
+
+    def test_basalam_invoice_preserves_each_lines_real_business(self):
+        from .models import (
+            ProductVariant,
+            SaleOrder,
+            SalesChannel,
+            StockBalance,
+            StockLocation,
+        )
+
+        basalam, _ = SalesChannel.objects.get_or_create(
+            code="basalam",
+            defaults={
+                "title": "باسلام",
+                "active": True,
+            },
+        )
+
+        location = StockLocation.objects.create(
+            key="main",
+            title="انبار اصلی",
+            active=True,
+        )
+
+        dia_variant = ProductVariant.objects.get(product__code="DIA-1")
+        holder_variant = ProductVariant.objects.get(product__code="HOLDER-1")
+
+        StockBalance.objects.create(
+            variant=dia_variant,
+            location=location,
+            qty=10,
+        )
+        StockBalance.objects.create(
+            variant=holder_variant,
+            location=location,
+            qty=10,
+        )
+
+        response = self.client.post(
+            reverse("sale_day", args=[self.day.id]),
+            {
+                "mode": "basalam",
+                "business": str(dia_variant.product.business_id),
+                f"qty_{dia_variant.id}": "2",
+                f"price_{dia_variant.id}": "100000",
+                f"qty_{holder_variant.id}": "3",
+                f"price_{holder_variant.id}": "100000",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        order = SaleOrder.objects.get(day=self.day)
+        lines = {
+            line.variant.product.code: line
+            for line in order.lines.select_related(
+                "variant__product",
+                "business",
+            )
+        }
+
+        self.assertEqual(
+            lines["DIA-1"].business_id,
+            dia_variant.product.business_id,
+        )
+        self.assertEqual(
+            lines["HOLDER-1"].business_id,
+            holder_variant.product.business_id,
+        )
+
+    def test_basalam_invoice_does_not_require_business_selection(self):
+        from .models import (
+            ProductVariant,
+            SaleOrder,
+            SalesChannel,
+            StockBalance,
+            StockLocation,
+        )
+
+        SalesChannel.objects.get_or_create(
+            code="basalam",
+            defaults={"title": "باسلام", "active": True},
+        )
+
+        location = StockLocation.objects.create(
+            key="main",
+            title="انبار اصلی",
+            active=True,
+        )
+
+        dia_variant = ProductVariant.objects.get(product__code="DIA-1")
+        StockBalance.objects.create(
+            variant=dia_variant,
+            location=location,
+            qty=10,
+        )
+
+        self.client.raise_request_exception = False
+
+        response = self.client.post(
+            reverse("sale_day", args=[self.day.id]),
+            {
+                "mode": "basalam",
+                f"qty_{dia_variant.id}": "1",
+                f"price_{dia_variant.id}": "100000",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        order = SaleOrder.objects.get(day=self.day)
+        line = order.lines.get()
+
+        self.assertEqual(
+            line.business_id,
+            dia_variant.product.business_id,
+        )
+
+    def test_basalam_form_hides_business_selector(self):
+        SalesChannel.objects.get_or_create(
+            code="basalam",
+            defaults={"title": "باسلام", "active": True},
+        )
+
+        response = self.client.get(
+            reverse("sale_day", args=[self.day.id]),
+            {"mode": "basalam"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'name="business"')
+
+    def test_basalam_invoice_saves_installment_payment_type(self):
+        from .models import (
+            ProductVariant,
+            SaleOrder,
+            SalesChannel,
+            StockBalance,
+            StockLocation,
+        )
+
+        SalesChannel.objects.get_or_create(
+            code="basalam",
+            defaults={"title": "باسلام", "active": True},
+        )
+
+        location = StockLocation.objects.create(
+            key="main",
+            title="انبار اصلی",
+            active=True,
+        )
+
+        variant = ProductVariant.objects.get(product__code="DIA-1")
+        StockBalance.objects.create(
+            variant=variant,
+            location=location,
+            qty=10,
+        )
+
+        response = self.client.post(
+            reverse("sale_day", args=[self.day.id]),
+            {
+                "mode": "basalam",
+                "basalam_payment_type": "installment",
+                f"qty_{variant.id}": "1",
+                f"price_{variant.id}": "100000",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        order = SaleOrder.objects.get(day=self.day)
+        self.assertEqual(
+            order.basalam_payment_type,
+            "installment",
+        )
+
+    def test_basalam_form_shows_cash_and_installment_payment_types(self):
+        SalesChannel.objects.get_or_create(
+            code="basalam",
+            defaults={"title": "باسلام", "active": True},
+        )
+
+        response = self.client.get(
+            reverse("sale_day", args=[self.day.id]),
+            {"mode": "basalam"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="basalam_payment_type"')
+        self.assertContains(response, 'value="cash"')
+        self.assertContains(response, 'value="installment"')
+        self.assertContains(response, "نقدی")
+        self.assertContains(response, "اقساطی")
+
+    def test_basalam_form_shows_cash_and_installment_payment_types(self):
+        SalesChannel.objects.get_or_create(
+            code="basalam",
+            defaults={"title": "باسلام", "active": True},
+        )
+
+        response = self.client.get(
+            reverse("sale_day", args=[self.day.id]),
+            {"mode": "basalam"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="basalam_payment_type"')
+        self.assertContains(response, 'value="cash"')
+        self.assertContains(response, 'value="installment"')
+        self.assertContains(response, "نقدی")
+        self.assertContains(response, "اقساطی")
+
+    def test_basalam_installment_plan_matches_reference_example(self):
+        from .services import basalam_installment_plan
+
+        plan = basalam_installment_plan(1000000)
+
+        self.assertEqual(plan["down_payment"], 250000)
+        self.assertEqual(plan["financed_amount"], 750000)
+        self.assertEqual(plan["installment_count"], 2)
+        self.assertEqual(plan["installment_amount"], 394800)
+        self.assertEqual(plan["installments_total"], 789600)
+        self.assertEqual(plan["total_payable"], 1039600)
+        self.assertEqual(plan["price_increase"], 39600)
+
+    def test_basalam_installment_sale_uses_final_payable_for_fee_and_metrics(self):
+        from .models import (
+            ProductVariant,
+            SaleOrder,
+            SalesChannel,
+            StockBalance,
+            StockLocation,
+        )
+        from .services import sale_metrics
+
+        SalesChannel.objects.get_or_create(
+            code="basalam",
+            defaults={"title": "باسلام", "active": True},
+        )
+
+        location = StockLocation.objects.create(
+            key="main",
+            title="انبار اصلی",
+            active=True,
+        )
+
+        variant = ProductVariant.objects.get(product__code="DIA-1")
+
+        StockBalance.objects.create(
+            variant=variant,
+            location=location,
+            qty=10,
+        )
+
+        response = self.client.post(
+            reverse("sale_day", args=[self.day.id]),
+            {
+                "mode": "basalam",
+                "basalam_payment_type": "installment",
+                f"qty_{variant.id}": "1",
+                f"price_{variant.id}": "1000000",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        order = SaleOrder.objects.get(day=self.day)
+        line = order.lines.get()
+
+        self.assertEqual(line.base_sale_price, 1000000)
+        self.assertEqual(line.sale_price, 1000000)
+        self.assertEqual(line.basalam_installment_increase, 39600)
+        self.assertEqual(line.channel_fee_unit_snapshot, 145544)
+
+        metrics = sale_metrics(line)
+        self.assertEqual(metrics["gross"], 1039600)
+        self.assertEqual(metrics["channel_fee"], 145544)
+
+    def test_basalam_installment_order_saves_payment_snapshot_excluding_shipping(self):
+        from .models import (
+            ProductVariant,
+            SaleOrder,
+            SalesChannel,
+            StockBalance,
+            StockLocation,
+        )
+
+        SalesChannel.objects.get_or_create(
+            code="basalam",
+            defaults={"title": "باسلام", "active": True},
+        )
+
+        location = StockLocation.objects.create(
+            key="main",
+            title="انبار اصلی",
+            active=True,
+        )
+
+        variant = ProductVariant.objects.get(product__code="DIA-1")
+        StockBalance.objects.create(
+            variant=variant,
+            location=location,
+            qty=10,
+        )
+
+        response = self.client.post(
+            reverse("sale_day", args=[self.day.id]),
+            {
+                "mode": "basalam",
+                "basalam_payment_type": "installment",
+                "shipping_cost": "160000",
+                f"qty_{variant.id}": "1",
+                f"price_{variant.id}": "1000000",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        order = SaleOrder.objects.get(day=self.day)
+
+        self.assertEqual(order.basalam_down_payment, 250000)
+        self.assertEqual(order.basalam_installment_count, 2)
+        self.assertEqual(order.basalam_installment_amount, 394800)
+        self.assertEqual(order.basalam_price_increase, 39600)
+        self.assertEqual(order.basalam_total_payable, 1039600)
+
+    def test_basalam_installment_multi_quantity_fee_uses_exact_final_line_total(self):
+        from .models import SaleLine, StockBalance, StockLocation
+        from .services import sale_metrics
+        SalesChannel.objects.get_or_create(
+            code="basalam",
+            defaults={"title": "باسلام"},
+        )
+
+        location = StockLocation.objects.create(
+            key="main",
+            title="انبار اصلی",
+            active=True,
+        )
+
+        variant = ProductVariant.objects.get(product__code="DIA-1")
+        StockBalance.objects.create(
+            variant=variant,
+            location=location,
+            qty=10,
+         )
+
+        response = self.client.post(
+            reverse("sale_day", args=[self.day.id]),
+            {
+                "mode": "basalam",
+                "basalam_payment_type": "installment",
+                f"qty_{variant.id}": "3",
+                f"price_{variant.id}": "100000",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        line = SaleLine.objects.get(
+            order__day=self.day,
+            variant=variant,
+        )
+        metrics = sale_metrics(line)
+
+        self.assertEqual(line.basalam_installment_increase, 11880)
+        self.assertEqual(metrics["gross"], 311880)
+        self.assertEqual(metrics["channel_fee"], 43663)
+
+    def test_basalam_edit_installment_to_cash_clears_installment_values(self):
+        from .models import SaleLine, SaleOrder, StockBalance, StockLocation
+        from .services import sale_metrics
+
+        SalesChannel.objects.get_or_create(
+            code="basalam",
+            defaults={"title": "Basalam"},
+        )
+
+        location = StockLocation.objects.create(
+            key="main",
+            title="Main",
+            active=True,
+        )
+
+        variant = ProductVariant.objects.get(product__code="DIA-1")
+        StockBalance.objects.create(
+            variant=variant,
+            location=location,
+            qty=10,
+        )
+
+        response = self.client.post(
+            reverse("sale_day", args=[self.day.id]),
+            {
+                "mode": "basalam",
+                "basalam_payment_type": "installment",
+                f"qty_{variant.id}": "1",
+                f"price_{variant.id}": "100000",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        order = SaleOrder.objects.get(day=self.day)
+
+        response = self.client.post(
+            reverse("sale_day", args=[self.day.id]),
+            {
+                "mode": "basalam",
+                "order_id": str(order.id),
+                "basalam_payment_type": "cash",
+                f"qty_{variant.id}": "1",
+                f"price_{variant.id}": "100000",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        order.refresh_from_db()
+        line = SaleLine.objects.get(order=order, variant=variant)
+        metrics = sale_metrics(line)
+
+        self.assertEqual(order.basalam_down_payment, 0)
+        self.assertEqual(order.basalam_installment_count, 0)
+        self.assertEqual(order.basalam_installment_amount, 0)
+        self.assertEqual(order.basalam_price_increase, 0)
+        self.assertEqual(order.basalam_total_payable, 0)
+        self.assertEqual(line.basalam_installment_increase, 0)
+        self.assertEqual(metrics["gross"], 100000)
+        self.assertEqual(metrics["channel_fee"], 14000)
+    def test_basalam_installment_mixed_businesses_use_correct_commission_rates(self):
+        from .models import SaleOrder, StockBalance, StockLocation
+        from .services import sale_metrics
+
+        SalesChannel.objects.get_or_create(
+            code="basalam",
+            defaults={"title": "Basalam", "active": True},
+        )
+
+        location = StockLocation.objects.create(
+            key="main",
+            title="Main",
+            active=True,
+        )
+
+        dia = ProductVariant.objects.get(product__code="DIA-1")
+        body = ProductVariant.objects.get(product__code="BODY-1")
+        holder = ProductVariant.objects.get(product__code="HOLDER-1")
+
+        dia.product.business.code = "dia"
+        dia.product.business.save(update_fields=["code"])
+
+        body.product.business.code = "bodyguard"
+        body.product.business.save(update_fields=["code"])
+
+        holder.product.business.code = "holder"
+        holder.product.business.save(update_fields=["code"])
+
+        for variant in (dia, body, holder):
+            StockBalance.objects.create(
+                variant=variant,
+                location=location,
+                qty=20,
+            )
+
+        response = self.client.post(
+            reverse("sale_day", args=[self.day.id]),
+            {
+                "mode": "basalam",
+                "basalam_payment_type": "installment",
+                f"qty_{dia.id}": "3",
+                f"price_{dia.id}": "100000",
+                f"qty_{body.id}": "2",
+                f"price_{body.id}": "150000",
+                f"qty_{holder.id}": "2",
+                f"price_{holder.id}": "200000",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        order = SaleOrder.objects.get(day=self.day)
+        lines = {
+            line.variant.product.code: line
+            for line in order.lines.select_related("variant__product")
+        }
+
+        self.assertEqual(order.basalam_price_increase, 39600)
+        self.assertEqual(order.basalam_total_payable, 1039600)
+
+        self.assertEqual(lines["DIA-1"].basalam_installment_increase, 11880)
+        self.assertEqual(lines["BODY-1"].basalam_installment_increase, 11880)
+        self.assertEqual(lines["HOLDER-1"].basalam_installment_increase, 15840)
+
+        self.assertEqual(sale_metrics(lines["DIA-1"])["channel_fee"], 43663)
+        self.assertEqual(sale_metrics(lines["BODY-1"])["channel_fee"], 43663)
+        self.assertEqual(sale_metrics(lines["HOLDER-1"])["channel_fee"], 43663)
+    def test_basalam_edit_form_keeps_installment_selected(self):
+        from .models import SaleOrder
+
+        channel, _ = SalesChannel.objects.get_or_create(
+            code="basalam",
+            defaults={"title": "Basalam", "active": True},
+        )
+
+        order = SaleOrder.objects.create(
+            day=self.day,
+            sales_channel=channel,
+            basalam_payment_type="installment",
+        )
+
+        response = self.client.get(
+            reverse("sale_day", args=[self.day.id]),
+            {
+                "mode": "basalam",
+                "order": str(order.id),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'value="installment" selected')
+    def test_basalam_installment_edit_form_shows_installment_summary(self):
+        from .models import SaleOrder
+
+        channel, _ = SalesChannel.objects.get_or_create(
+            code="basalam",
+            defaults={"title": "Basalam", "active": True},
+        )
+
+        order = SaleOrder.objects.create(
+            day=self.day,
+            sales_channel=channel,
+            basalam_payment_type="installment",
+            basalam_down_payment=250000,
+            basalam_installment_count=2,
+            basalam_installment_amount=394800,
+            basalam_price_increase=39600,
+            basalam_total_payable=1039600,
+        )
+
+        response = self.client.get(
+            reverse("sale_day", args=[self.day.id]),
+            {"mode": "basalam", "order": str(order.id)},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="basalam-installment-summary"')
+        self.assertContains(response, "250000")
+        self.assertContains(response, "394800")
+        self.assertContains(response, "39600")
+        self.assertContains(response, "1039600")
+    def test_basalam_installment_platform_receivable_uses_final_amount_and_exact_fee(self):
+        from .models import SaleOrder, StockBalance, StockLocation
+        from .services import platform_receivable_totals
+
+        SalesChannel.objects.get_or_create(
+            code="basalam",
+            defaults={"title": "Basalam", "active": True},
+        )
+
+        location = StockLocation.objects.create(
+            key="main",
+            title="Main",
+            active=True,
+        )
+
+        variant = ProductVariant.objects.get(product__code="DIA-1")
+        StockBalance.objects.create(
+            variant=variant,
+            location=location,
+            qty=10,
+        )
+
+        response = self.client.post(
+            reverse("sale_day", args=[self.day.id]),
+            {
+                "mode": "basalam",
+                "basalam_payment_type": "installment",
+                f"qty_{variant.id}": "3",
+                f"price_{variant.id}": "100000",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        order = SaleOrder.objects.get(day=self.day)
+        self.assertEqual(
+            order.payment_status,
+            SaleOrder.PaymentStatus.PENDING,
+        )
+
+        totals = platform_receivable_totals()
+        self.assertEqual(totals["basalam"], 268217)

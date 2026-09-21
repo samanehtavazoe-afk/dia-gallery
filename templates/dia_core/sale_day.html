@@ -419,7 +419,7 @@
     <div class="card-body">
       <div class="row g-3">
 
-        {% if mode != "site" %}
+        {% if mode != "site" and mode != "basalam" %}
         <div class="col-md-4">
           <label class="form-label">بیزنس</label>
           <select class="form-select" name="business" id="businessSelect" required>
@@ -465,6 +465,27 @@
               </option>
             {% endfor %}
           </select>
+        </div>
+        {% endif %}
+
+        {% if mode == "basalam" %}
+        <div class="col-md-4">
+          <label class="form-label">نوع پرداخت باسلام</label>
+          <select class="form-select" name="basalam_payment_type">
+            <option value="cash" {% if not selected_order or selected_order.basalam_payment_type == "cash" %}selected{% endif %}>نقدی</option>
+            <option value="installment" {% if selected_order and selected_order.basalam_payment_type == "installment" %}selected{% endif %}>اقساطی</option>
+          </select>
+        </div>
+        {% endif %}
+        {% if mode == "basalam" and selected_order and selected_order.basalam_payment_type == "installment" %}
+        <div id="basalam-installment-summary" class="col-12">
+          <div class="alert alert-info mb-0">
+            پیش‌پرداخت: {{ selected_order.basalam_down_payment }} |
+            تعداد اقساط: {{ selected_order.basalam_installment_count }} |
+            مبلغ هر قسط: {{ selected_order.basalam_installment_amount }} |
+            افزایش قیمت: {{ selected_order.basalam_price_increase }} |
+            کل پرداختی: {{ selected_order.basalam_total_payable }}
+          </div>
         </div>
         {% endif %}
 
