@@ -21,6 +21,8 @@ export type CatalogProduct = {
   categorySlug: string;
   categoryTitle: string;
   available: boolean;
+  createdAt: string;
+  image?: CatalogImage;
 };
 
 export type CatalogColor = {
@@ -52,6 +54,12 @@ export type CatalogProductDetails = CatalogProduct & {
   images: CatalogImage[];
 };
 
+export type HomepageCollections = {
+  today: CatalogProduct[];
+  latest: CatalogProduct[];
+  discounted: CatalogProduct[];
+};
+
 type CategoryRow = {
   id: number;
   slug: string;
@@ -73,6 +81,12 @@ type ProductRow = {
   category_slug: string;
   category_title: string;
   total_stock: number;
+  created_at: string;
+  image_id: number | null;
+  image_color_id: number | null;
+  image_path: string | null;
+  image_alt: string | null;
+  image_sort_order: number | null;
 };
 
 type ColorRow = {
@@ -126,6 +140,19 @@ function mapProduct(row: ProductRow): CatalogProduct {
     categorySlug: row.category_slug,
     categoryTitle: row.category_title,
     available: row.total_stock > 0,
+    createdAt: row.created_at,
+    image:
+      row.image_id !== null &&
+      row.image_path !== null &&
+      row.image_alt !== null
+        ? {
+            id: row.image_id,
+            colorId: row.image_color_id ?? undefined,
+            path: row.image_path,
+            alt: row.image_alt,
+            sortOrder: row.image_sort_order ?? 0,
+          }
+        : undefined,
   };
 }
 
@@ -141,6 +168,42 @@ const productSelect = `
     p.category_id,
     c.slug AS category_slug,
     c.title AS category_title,
+    p.created_at,
+    (
+      SELECT image.id
+      FROM product_images image
+      WHERE image.product_id = p.id
+      ORDER BY image.sort_order, image.id
+      LIMIT 1
+    ) AS image_id,
+    (
+      SELECT image.color_id
+      FROM product_images image
+      WHERE image.product_id = p.id
+      ORDER BY image.sort_order, image.id
+      LIMIT 1
+    ) AS image_color_id,
+    (
+      SELECT image.path
+      FROM product_images image
+      WHERE image.product_id = p.id
+      ORDER BY image.sort_order, image.id
+      LIMIT 1
+    ) AS image_path,
+    (
+      SELECT image.alt
+      FROM product_images image
+      WHERE image.product_id = p.id
+      ORDER BY image.sort_order, image.id
+      LIMIT 1
+    ) AS image_alt,
+    (
+      SELECT image.sort_order
+      FROM product_images image
+      WHERE image.product_id = p.id
+      ORDER BY image.sort_order, image.id
+      LIMIT 1
+    ) AS image_sort_order,
     COALESCE(SUM(
       CASE
         WHEN pv.is_active = 1 THEN pv.stock
@@ -163,7 +226,8 @@ const productGroupBy = `
     p.compare_at_price,
     p.category_id,
     c.slug,
-    c.title
+    c.title,
+    p.created_at
 `;
 
 export function getActiveCategories(db: CatalogDatabase): CatalogCategory[] {
@@ -177,6 +241,23 @@ export function getActiveCategories(db: CatalogDatabase): CatalogCategory[] {
     .all() as CategoryRow[];
 
   return rows.map(mapCategory);
+}
+
+export function getActiveCategoryBySlug(
+  db: CatalogDatabase,
+  slug: string,
+): CatalogCategory | null {
+  const row = db
+    .prepare(`
+      SELECT id, slug, title, image_path, image_alt, sort_order
+      FROM categories
+      WHERE slug = ?
+        AND is_active = 1
+      LIMIT 1
+    `)
+    .get(slug) as CategoryRow | undefined;
+
+  return row ? mapCategory(row) : null;
 }
 
 export function getActiveProducts(db: CatalogDatabase): CatalogProduct[] {
@@ -300,4 +381,33 @@ export function selectImagesForColor(
   const generalImages = images.filter((image) => image.colorId === undefined);
 
   return [...colorImages, ...generalImages];
+}
+
+export function getHomepageCollections(
+  db: CatalogDatabase,
+  dayIndex = Math.floor(Date.now() / 86_400_000),
+): HomepageCollections {
+  const products = getActiveProducts(db);
+  const selectedIndex = products.length
+    ? ((dayIndex % products.length) + products.length) % products.length
+    : 0;
+  const today = products.length ? [products[selectedIndex]] : [];
+  const remaining = products.filter(
+    (product) => product.slug !== today[0]?.slug,
+  );
+  const discounted = remaining
+    .filter(
+      (product) =>
+        product.compareAtPrice !== undefined &&
+        product.compareAtPrice > product.price,
+    )
+    .slice(0, 4);
+  const discountedSlugs = new Set(
+    discounted.map((product) => product.slug),
+  );
+  const latest = remaining
+    .filter((product) => !discountedSlugs.has(product.slug))
+    .slice(0, 4);
+
+  return { today, latest, discounted };
 }

@@ -1,15 +1,47 @@
 import { migrateCatalogDatabase, openCatalogDatabase } from "./database";
-import { getActiveProducts } from "./repository";
+import {
+  getActiveCategories,
+  getActiveCategoryBySlug,
+  getActiveProducts,
+  getActiveProductsByCategory,
+  getHomepageCollections,
+  getProductDetailsBySlug,
+} from "./repository";
 import { seedCatalogDatabase } from "./seed";
 
-export async function loadShopProducts() {
+function readCatalog<T>(reader: (db: ReturnType<typeof openCatalogDatabase>) => T) {
   const db = openCatalogDatabase();
 
   try {
     migrateCatalogDatabase(db);
     seedCatalogDatabase(db);
-    return getActiveProducts(db);
+    return reader(db);
   } finally {
     db.close();
   }
+}
+
+export async function loadShopProducts() {
+  return readCatalog(getActiveProducts);
+}
+
+export async function loadCategoryCatalog(slug: string) {
+  return readCatalog((db) => {
+    const category = getActiveCategoryBySlug(db, slug);
+
+    return category
+      ? { category, products: getActiveProductsByCategory(db, slug) }
+      : null;
+  });
+}
+
+export async function loadProductCatalog(slug: string) {
+  return readCatalog((db) => getProductDetailsBySlug(db, slug));
+}
+
+export async function loadHomepageCatalog(dayIndex?: number) {
+  return readCatalog((db) => ({
+    categories: getActiveCategories(db),
+    collections: getHomepageCollections(db, dayIndex),
+  }));
 }
