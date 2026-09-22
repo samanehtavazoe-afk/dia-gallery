@@ -4,6 +4,7 @@
 /node_modules
 /.npm-cache
 /.npm-interrupted
+/.tmp-seed
 /.pnp
 .pnp.*
 .yarn/*

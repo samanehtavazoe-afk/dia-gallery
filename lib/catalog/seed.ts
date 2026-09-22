@@ -47,6 +47,12 @@ const seedProducts = [
     price: 285000,
     compareAtPrice: null,
     categorySlug: "women-underwear",
+    color: "مشکی",
+    hexCode: "#171615",
+    size: "M",
+    sku: "DIA-WOMEN-01-BLK-M",
+    imagePath: "/categories/women-underwear.webp",
+    imageAlt: "محصول زنانه منتخب مشکی",
   },
   {
     slug: "men-essential-01",
@@ -56,6 +62,12 @@ const seedProducts = [
     price: 285000,
     compareAtPrice: 320000,
     categorySlug: "men-underwear",
+    color: "خاکستری",
+    hexCode: "#777777",
+    size: "L",
+    sku: "DIA-MEN-01-GRY-L",
+    imagePath: "/categories/men-underwear.webp",
+    imageAlt: "محصول مردانه منتخب خاکستری",
   },
   {
     slug: "nobonian-holder-01",
@@ -65,11 +77,25 @@ const seedProducts = [
     price: 100000,
     compareAtPrice: null,
     categorySlug: "shoe-holder",
+    color: "مشکی",
+    hexCode: "#171615",
+    size: "تک‌سایز",
+    sku: "NOBONIAN-HOLDER-01",
+    imagePath: "/categories/shoe-holder-cream.webp",
+    imageAlt: "هولدر داخل کفش زنانه و مردانه",
   },
 ] as const;
 
 export function seedCatalogDatabase(db: CatalogDatabase) {
-  const upsertCategory = db.prepare(`
+  const seedKey = "catalog-foundation-v1";
+
+  if (
+    db.prepare("SELECT 1 FROM catalog_seed_runs WHERE seed_key = ?").get(seedKey)
+  ) {
+    return;
+  }
+
+  const insertCategory = db.prepare(`
     INSERT INTO categories (
       slug,
       title,
@@ -86,18 +112,13 @@ export function seedCatalogDatabase(db: CatalogDatabase) {
       @sortOrder,
       1
     )
-    ON CONFLICT(slug) DO UPDATE SET
-      title = excluded.title,
-      image_path = excluded.image_path,
-      image_alt = excluded.image_alt,
-      sort_order = excluded.sort_order
   `);
 
   const getCategoryId = db.prepare(
     "SELECT id FROM categories WHERE slug = ?",
   );
 
-  const upsertProduct = db.prepare(`
+  const insertProduct = db.prepare(`
     INSERT INTO products (
       slug,
       name,
@@ -118,19 +139,24 @@ export function seedCatalogDatabase(db: CatalogDatabase) {
       @categoryId,
       1
     )
-    ON CONFLICT(slug) DO UPDATE SET
-      name = excluded.name,
-      brand = excluded.brand,
-      description = excluded.description,
-      price = excluded.price,
-      compare_at_price = excluded.compare_at_price,
-      category_id = excluded.category_id,
-      updated_at = CURRENT_TIMESTAMP
+  `);
+
+  const insertColor = db.prepare(`
+    INSERT INTO product_colors (product_id, name, hex_code, sort_order)
+    VALUES (?, ?, ?, 1)
+  `);
+  const insertVariant = db.prepare(`
+    INSERT INTO product_variants (product_id, color_id, size, sku, stock)
+    VALUES (?, ?, ?, ?, 0)
+  `);
+  const insertImage = db.prepare(`
+    INSERT INTO product_images (product_id, color_id, path, alt, sort_order)
+    VALUES (?, ?, ?, ?, 1)
   `);
 
   const seed = db.transaction(() => {
     for (const category of seedCategories) {
-      upsertCategory.run(category);
+      insertCategory.run(category);
     }
 
     for (const product of seedProducts) {
@@ -144,7 +170,7 @@ export function seedCatalogDatabase(db: CatalogDatabase) {
         );
       }
 
-      upsertProduct.run({
+      const productResult = insertProduct.run({
         slug: product.slug,
         name: product.name,
         brand: product.brand,
@@ -153,7 +179,27 @@ export function seedCatalogDatabase(db: CatalogDatabase) {
         compareAtPrice: product.compareAtPrice,
         categoryId: category.id,
       });
+
+      const productId = Number(productResult.lastInsertRowid);
+      const colorResult = insertColor.run(
+        productId,
+        product.color,
+        product.hexCode,
+      );
+      const colorId = Number(colorResult.lastInsertRowid);
+
+      insertVariant.run(productId, colorId, product.size, product.sku);
+      insertImage.run(
+        productId,
+        colorId,
+        product.imagePath,
+        product.imageAlt,
+      );
     }
+
+    db.prepare("INSERT INTO catalog_seed_runs (seed_key) VALUES (?)").run(
+      seedKey,
+    );
   });
 
   seed();

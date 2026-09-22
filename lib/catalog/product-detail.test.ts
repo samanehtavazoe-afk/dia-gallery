@@ -15,6 +15,8 @@ function createDetailedProductDatabase() {
     .prepare("SELECT id FROM products WHERE slug = ?")
     .get("women-essential-01") as { id: number };
 
+  db.prepare("DELETE FROM product_colors WHERE product_id = ?").run(product.id);
+
   const black = db
     .prepare(
       "INSERT INTO product_colors (product_id, name, hex_code, sort_order) VALUES (?, ?, ?, ?) RETURNING id",

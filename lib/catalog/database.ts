@@ -36,6 +36,11 @@ export function openCatalogDatabase(
 
 export function migrateCatalogDatabase(db: CatalogDatabase) {
   db.exec(`
+    CREATE TABLE IF NOT EXISTS catalog_seed_runs (
+      seed_key TEXT PRIMARY KEY,
+      applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS categories (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       slug TEXT NOT NULL UNIQUE,

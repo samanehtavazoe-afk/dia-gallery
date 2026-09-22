@@ -42,6 +42,7 @@ describe("catalog database", () => {
       .map((row) => (row as { name: string }).name);
 
     expect(tables).toEqual([
+      "catalog_seed_runs",
       "categories",
       "product_colors",
       "product_images",

@@ -45,6 +45,45 @@ describe("catalog seed", () => {
       db.prepare("SELECT COUNT(*) AS count FROM products").get(),
     ).toEqual({ count: 3 });
 
+    expect(
+      db.prepare("SELECT COUNT(*) AS count FROM catalog_seed_runs").get(),
+    ).toEqual({ count: 1 });
+
+    expect(db.prepare("SELECT COUNT(*) AS count FROM product_colors").get()).toEqual({ count: 3 });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM product_variants").get()).toEqual({ count: 3 });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM product_images").get()).toEqual({ count: 3 });
+    expect(db.prepare("SELECT SUM(stock) AS stock FROM product_variants").get()).toEqual({ stock: 0 });
+
+    db.close();
+  });
+
+  it("does not overwrite catalog edits when the seed runs again", () => {
+    const db = openCatalogDatabase(":memory:");
+    migrateCatalogDatabase(db);
+    seedCatalogDatabase(db);
+
+    db.prepare("UPDATE products SET price = ? WHERE slug = ?").run(
+      399000,
+      "women-essential-01",
+    );
+    db.prepare("UPDATE categories SET title = ? WHERE slug = ?").run(
+      "عنوان ویرایش‌شده",
+      "women-underwear",
+    );
+
+    seedCatalogDatabase(db);
+
+    expect(
+      db.prepare("SELECT price FROM products WHERE slug = ?").get(
+        "women-essential-01",
+      ),
+    ).toEqual({ price: 399000 });
+    expect(
+      db.prepare("SELECT title FROM categories WHERE slug = ?").get(
+        "women-underwear",
+      ),
+    ).toEqual({ title: "عنوان ویرایش‌شده" });
+
     db.close();
   });
 });
