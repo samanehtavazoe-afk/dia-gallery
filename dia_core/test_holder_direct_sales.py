@@ -215,6 +215,51 @@ class HolderDirectInventoryTests(TestCase):
         self.assertEqual(self._qty("large"), 96)
 
 
+    def test_factory_order_does_not_reduce_warehouse_stock(self):
+        self.order.supply_source = "factory"
+        self.order.save(update_fields=["supply_source"])
+
+        self._sync()
+
+        self.assertEqual(self._qty("small"), 100)
+        self.assertEqual(self._qty("medium"), 100)
+        self.assertEqual(self._qty("large"), 100)
+
+
+    def test_switching_order_from_warehouse_to_factory_restores_stock(self):
+        self._sync()
+
+        self.assertEqual(self._qty("small"), 98)
+        self.assertEqual(self._qty("medium"), 97)
+        self.assertEqual(self._qty("large"), 96)
+
+        self.order.supply_source = "factory"
+        self.order.save(update_fields=["supply_source"])
+        self._sync()
+
+        self.assertEqual(self._qty("small"), 100)
+        self.assertEqual(self._qty("medium"), 100)
+        self.assertEqual(self._qty("large"), 100)
+
+
+    def test_switching_order_from_factory_to_warehouse_reduces_stock(self):
+        self.order.supply_source = "factory"
+        self.order.save(update_fields=["supply_source"])
+        self._sync()
+
+        self.assertEqual(self._qty("small"), 100)
+        self.assertEqual(self._qty("medium"), 100)
+        self.assertEqual(self._qty("large"), 100)
+
+        self.order.supply_source = "warehouse"
+        self.order.save(update_fields=["supply_source"])
+        self._sync()
+
+        self.assertEqual(self._qty("small"), 98)
+        self.assertEqual(self._qty("medium"), 97)
+        self.assertEqual(self._qty("large"), 96)
+
+
 class HolderDirectSaleViewTests(TestCase):
     def setUp(self):
         user = get_user_model().objects.create_user(
@@ -317,3 +362,56 @@ class HolderDirectSaleViewTests(TestCase):
         self.assertEqual(self._stock("small"), 18)
         self.assertEqual(self._stock("medium"), 19)
         self.assertEqual(self._stock("large"), 17)
+
+    def test_holder_post_factory_source_keeps_warehouse_stock(self):
+        response = self.client.post(
+            self.url,
+            {
+                "mode": "holder",
+                "customer_name": "مشتری کارخانه",
+                "supply_source": "factory",
+                "quantity_small": "2",
+                "quantity_medium": "1",
+                "quantity_large": "3",
+                "unit_price_small": "90000",
+                "unit_price_medium": "100000",
+                "unit_price_large": "110000",
+                "amount_received": "0",
+                "receipt_type": "deposit",
+                "recipient": "samaneh",
+                "note": "ارسال مستقیم کارخانه",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        order = models.HolderDirectOrder.objects.get()
+        self.assertEqual(order.supply_source, "factory")
+        self.assertEqual(self._stock("small"), 20)
+        self.assertEqual(self._stock("medium"), 20)
+        self.assertEqual(self._stock("large"), 20)
+
+    def test_holder_form_shows_warehouse_and_factory_supply_sources(self):
+        response = self.client.get(self.url, {"mode": "holder"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="supply_source"')
+        self.assertContains(response, 'value="warehouse"')
+        self.assertContains(response, 'value="factory"')
+        self.assertContains(response, "انبار")
+        self.assertContains(response, "کارخانه")
+
+    def test_holder_order_list_shows_supply_source(self):
+        models.HolderDirectOrder.objects.create(
+            date=self.day.date,
+            customer_name="مشتری کارخانه",
+            supply_source="factory",
+            quantity_small=1,
+            unit_price_small=90000,
+            order_total=90000,
+        )
+
+        response = self.client.get(self.url, {"mode": "holder"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "کارخانه")
+        self.assertContains(response, "تأمین")

@@ -291,8 +291,16 @@ def sale_day(request, day_id):
 
             note = (request.POST.get("note") or "").strip()
 
+            supply_source = (
+                request.POST.get("supply_source")
+                or HolderDirectOrder.SupplySource.WAREHOUSE
+            ).strip()
+            if supply_source not in HolderDirectOrder.SupplySource.values:
+                raise ValueError("محل تامین نامعتبر است.")
+
             order = HolderDirectOrder.objects.create(
                 date=day.date,
+                supply_source=supply_source,
                 customer_name=customer_name,
                 quantity_small=quantity_small,
                 quantity_medium=quantity_medium,

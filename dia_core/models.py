@@ -450,7 +450,12 @@ class PlatformSettlement(models.Model):
 
 
 class HolderDirectOrder(models.Model):
+    class SupplySource(models.TextChoices):
+        WAREHOUSE = "warehouse", "انبار"
+        FACTORY = "factory", "کارخانه"
+
     date = models.DateField(db_index=True)
+    supply_source = models.CharField(max_length=20, choices=SupplySource.choices, default=SupplySource.WAREHOUSE)
     customer_name = models.CharField(max_length=160)
     quantity_small = models.PositiveIntegerField(default=0)
     quantity_medium = models.PositiveIntegerField(default=0)

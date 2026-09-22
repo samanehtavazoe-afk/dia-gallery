@@ -168,6 +168,14 @@
         </div>
 
         <div class="col-md-4">
+          <label class="form-label">محل تامین</label>
+          <select class="form-select" name="supply_source">
+            <option value="warehouse" selected>انبار</option>
+            <option value="factory">کارخانه</option>
+          </select>
+        </div>
+
+        <div class="col-md-4">
           <label class="form-label">مبلغ دریافتی الان</label>
           <input
             class="form-control money"
@@ -227,6 +235,7 @@
       <thead>
         <tr>
           <th>مشتری</th>
+          <th>تأمین</th>
           <th>کوچک</th>
           <th>متوسط</th>
           <th>بزرگ</th>
@@ -240,6 +249,7 @@
         {% for order in holder_orders %}
           <tr>
             <td>{{ order.customer_name }}</td>
+            <td>{{ order.get_supply_source_display }}</td>
             <td class="num">{{ order.quantity_small }}</td>
             <td class="num">{{ order.quantity_medium }}</td>
             <td class="num">{{ order.quantity_large }}</td>
@@ -261,7 +271,7 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="7" class="text-center text-secondary py-4">
+            <td colspan="8" class="text-center text-secondary py-4">
               هنوز فروش هولدری برای این روز ثبت نشده.
             </td>
           </tr>
@@ -684,7 +694,7 @@
 
           {% empty %}
             <tr>
-              <td colspan="7" class="text-center text-secondary py-5">
+              <td colspan="8" class="text-center text-secondary py-5">
                 برای این بیزنس هنوز محصول فعالی تعریف نشده.
               </td>
             </tr>

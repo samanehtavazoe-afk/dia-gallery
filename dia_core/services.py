@@ -292,9 +292,13 @@ def sync_holder_direct_inventory(order):
     result = {}
 
     for bucket in ("small", "medium", "large"):
-        target = max(
-            0,
-            int(getattr(order, f"quantity_{bucket}") or 0),
+        target = (
+            0
+            if order.supply_source == HolderDirectOrder.SupplySource.FACTORY
+            else max(
+                0,
+                int(getattr(order, f"quantity_{bucket}") or 0),
+            )
         )
 
         variant = _holder_variant_for_bucket(bucket)
