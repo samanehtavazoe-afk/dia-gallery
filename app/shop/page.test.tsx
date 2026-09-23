@@ -14,6 +14,8 @@ vi.mock("@/lib/catalog/runtime", () => ({
       categorySlug: "women-underwear",
       categoryTitle: "لباس زیر زنانه",
       available: false,
+      createdAt: "2026-09-14 10:00:00",
+      image: undefined,
     },
     {
       id: 2,
@@ -27,6 +29,8 @@ vi.mock("@/lib/catalog/runtime", () => ({
       categorySlug: "men-underwear",
       categoryTitle: "لباس زیر مردانه",
       available: true,
+      createdAt: "2026-09-14 10:00:00",
+      image: undefined,
     },
   ]),
 }));
@@ -37,9 +41,8 @@ describe("ShopPage", () => {
   it("renders catalog products with price and stock state", async () => {
     render(await ShopPage());
 
-    expect(
-      screen.getByRole("heading", { name: "همه محصولات" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "فروشگاه", level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "همه محصولات", level: 2 })).toBeInTheDocument();
 
     expect(screen.getByText("محصول زنانه منتخب")).toBeInTheDocument();
     expect(screen.getByText("محصول مردانه منتخب")).toBeInTheDocument();
@@ -48,5 +51,7 @@ describe("ShopPage", () => {
     expect(
       screen.getByRole("link", { name: "مشاهده محصول محصول مردانه منتخب" }),
     ).toHaveAttribute("href", "/product/men-essential-01");
+    expect(screen.getByRole("banner")).toBeInTheDocument();
+    expect(screen.getByRole("contentinfo")).toBeInTheDocument();
   });
 });
