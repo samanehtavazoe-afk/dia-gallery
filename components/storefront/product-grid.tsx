@@ -1,7 +1,7 @@
-import type { StoreProduct } from "@/lib/storefront-data";
+import type { CatalogProduct } from "@/lib/catalog/repository";
 import { ProductCard } from "./product-card";
 
-export function ProductGrid({ products, title = "محصولات منتخب" }: { products: StoreProduct[]; title?: string }) {
+export function ProductGrid({ products, title = "محصولات منتخب" }: { products: CatalogProduct[]; title?: string }) {
   return (
     <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
       <div className="mb-6 flex items-end justify-between gap-4">

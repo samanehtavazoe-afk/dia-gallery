@@ -7,11 +7,11 @@ describe("CategoryGrid", () => {
     render(
       <CategoryGrid
         categories={[
-          { slug: "women-underwear", title: "لباس زیر زنانه", image: "/categories/women-underwear.jpg", imageAlt: "لباس زیر زنانه مشکی" },
-          { slug: "men-underwear", title: "لباس زیر مردانه", image: "/categories/men-underwear.jpg", imageAlt: "لباس زیر مردانه خاکستری" },
-          { slug: "men-undershirt", title: "زیرپوش مردانه", image: "/categories/men-undershirt.png", imageAlt: "زیرپوش مردانه طوسی" },
-          { slug: "hoodie", title: "هودی", image: "/categories/hoodie.png", imageAlt: "هودی مینیمال" },
-          { slug: "shoe-holder", title: "هولدر کفش", image: "/categories/shoe-holder.png", imageAlt: "هولدر داخل کفش زنانه و مردانه" },
+          { id: 1, slug: "women-underwear", title: "لباس زیر زنانه", imagePath: "/categories/women-underwear.jpg", imageAlt: "لباس زیر زنانه مشکی", sortOrder: 1 },
+          { id: 2, slug: "men-underwear", title: "لباس زیر مردانه", imagePath: "/categories/men-underwear.jpg", imageAlt: "لباس زیر مردانه خاکستری", sortOrder: 2 },
+          { id: 3, slug: "men-undershirt", title: "زیرپوش مردانه", imagePath: "/categories/men-undershirt.png", imageAlt: "زیرپوش مردانه طوسی", sortOrder: 3 },
+          { id: 4, slug: "hoodie", title: "هودی", imagePath: "/categories/hoodie.png", imageAlt: "هودی مینیمال", sortOrder: 4 },
+          { id: 5, slug: "shoe-holder", title: "هولدر کفش", imagePath: "/categories/shoe-holder.png", imageAlt: "هولدر داخل کفش زنانه و مردانه", sortOrder: 5 },
         ]}
       />,
     );
