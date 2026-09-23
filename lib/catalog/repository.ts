@@ -1,4 +1,5 @@
 import type { CatalogDatabase } from "./database";
+export { selectImagesForColor } from "./color-images";
 
 export type CatalogCategory = {
   id: number;
@@ -371,16 +372,6 @@ export function getProductDetailsBySlug(
       sortOrder: row.sort_order,
     })),
   };
-}
-
-export function selectImagesForColor(
-  images: CatalogImage[],
-  colorId: number,
-): CatalogImage[] {
-  const colorImages = images.filter((image) => image.colorId === colorId);
-  const generalImages = images.filter((image) => image.colorId === undefined);
-
-  return [...colorImages, ...generalImages];
 }
 
 export function getHomepageCollections(
