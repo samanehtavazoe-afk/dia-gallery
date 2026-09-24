@@ -97,11 +97,38 @@ describe("catalog database", () => {
     const color = database
       .prepare("INSERT INTO product_colors (product_id, name) VALUES (?, ?)")
       .run(product.lastInsertRowid, "مشکی");
+    const secondProduct = database
+      .prepare(
+        "INSERT INTO products (slug, name, brand, description, price, category_id) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        "second-product",
+        "محصول دوم",
+        "Dia",
+        "شرح",
+        120000,
+        category.lastInsertRowid,
+      );
 
     expect(() =>
       database!.prepare(
         "INSERT INTO product_variants (product_id, color_id, size, sku, stock) VALUES (?, ?, ?, ?, ?)",
       ).run(product.lastInsertRowid, 999, "M", "SKU-ORPHAN", 1),
+    ).toThrow();
+    expect(() =>
+      database!.prepare(
+        "INSERT INTO product_variants (product_id, color_id, size, sku, stock) VALUES (?, ?, ?, ?, ?)",
+      ).run(secondProduct.lastInsertRowid, color.lastInsertRowid, "M", "SKU-CROSS", 1),
+    ).toThrow();
+    expect(() =>
+      database!.prepare(
+        "INSERT INTO product_images (product_id, color_id, path, alt) VALUES (?, ?, ?, ?)",
+      ).run(
+        secondProduct.lastInsertRowid,
+        color.lastInsertRowid,
+        "/cross.webp",
+        "تصویر نامعتبر",
+      ),
     ).toThrow();
 
     database

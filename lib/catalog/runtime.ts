@@ -1,4 +1,4 @@
-import { migrateCatalogDatabase, openCatalogDatabase } from "./database";
+import { openCatalogDatabaseForRead } from "./database";
 import {
   getActiveCategories,
   getActiveCategoryBySlug,
@@ -7,14 +7,12 @@ import {
   getHomepageCollections,
   getProductDetailsBySlug,
 } from "./repository";
-import { seedCatalogDatabase } from "./seed";
-
-function readCatalog<T>(reader: (db: ReturnType<typeof openCatalogDatabase>) => T) {
-  const db = openCatalogDatabase();
+function readCatalog<T>(
+  reader: (db: ReturnType<typeof openCatalogDatabaseForRead>) => T,
+) {
+  const db = openCatalogDatabaseForRead();
 
   try {
-    migrateCatalogDatabase(db);
-    seedCatalogDatabase(db);
     return reader(db);
   } finally {
     db.close();

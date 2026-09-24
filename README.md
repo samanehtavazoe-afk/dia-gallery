@@ -17,15 +17,16 @@ npm run dev
 Node.js نسخه ۲۲ یا جدیدتر لازم است.
 
 ```bash
-sudo install -d -m 700 /var/lib/dia-gallery/data
+export DIA_SERVICE_USER=www-data
 export DIA_DB_PATH=/var/lib/dia-gallery/data/dia-gallery.sqlite
+sudo install -d -o "$DIA_SERVICE_USER" -g "$DIA_SERVICE_USER" -m 750 /var/lib/dia-gallery/data
 npm ci --ignore-scripts
 npm rebuild better-sqlite3
-npm run db:seed
+sudo -u "$DIA_SERVICE_USER" env DIA_DB_PATH="$DIA_DB_PATH" npm run db:seed
 npm run build
 ```
 
-سرویس اصلی نیز باید متغیر `DIA_DB_PATH` را با همین مسیر دریافت کند و کاربر اجرای سرویس اجازهٔ خواندن و نوشتن در پوشهٔ دیتابیس را داشته باشد. دادهٔ نمونه فقط در اجرای نخست ثبت می‌شود و اجرای دوبارهٔ دستور، تغییرات بعدی محصولات را بازنویسی نمی‌کند.
+مقدار `DIA_SERVICE_USER` باید نام همان کاربری باشد که سرویس سایت را اجرا می‌کند؛ اگر سایت با کاربر دیگری اجرا می‌شود، `www-data` را با نام آن جایگزین کنید. سرویس اصلی نیز باید متغیر `DIA_DB_PATH` را با همین مسیر دریافت کند. دادهٔ نمونه فقط با دستور `db:seed` و در اجرای نخست ثبت می‌شود و اجرای دوبارهٔ دستور، تغییرات بعدی محصولات را بازنویسی نمی‌کند.
 
 برای اجرای نسخهٔ ساخته‌شده:
 

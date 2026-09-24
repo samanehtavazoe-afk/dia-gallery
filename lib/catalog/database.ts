@@ -36,6 +36,19 @@ export function openCatalogDatabase(
   return db;
 }
 
+export function openCatalogDatabaseForRead(
+  path = resolveCatalogDatabasePath(),
+) {
+  const db = new Database(path, {
+    readonly: true,
+    fileMustExist: true,
+  });
+
+  db.pragma("foreign_keys = ON");
+
+  return db;
+}
+
 export function migrateCatalogDatabase(db: CatalogDatabase) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS catalog_seed_runs (
@@ -79,6 +92,7 @@ export function migrateCatalogDatabase(db: CatalogDatabase) {
       hex_code TEXT,
       sort_order INTEGER NOT NULL DEFAULT 0,
       UNIQUE (product_id, name),
+      UNIQUE (id, product_id),
       FOREIGN KEY (product_id) REFERENCES products(id)
         ON UPDATE CASCADE
         ON DELETE CASCADE
@@ -96,7 +110,7 @@ export function migrateCatalogDatabase(db: CatalogDatabase) {
       FOREIGN KEY (product_id) REFERENCES products(id)
         ON UPDATE CASCADE
         ON DELETE CASCADE,
-      FOREIGN KEY (color_id) REFERENCES product_colors(id)
+      FOREIGN KEY (color_id, product_id) REFERENCES product_colors(id, product_id)
         ON UPDATE CASCADE
         ON DELETE CASCADE
     );
@@ -111,10 +125,54 @@ export function migrateCatalogDatabase(db: CatalogDatabase) {
       FOREIGN KEY (product_id) REFERENCES products(id)
         ON UPDATE CASCADE
         ON DELETE CASCADE,
-      FOREIGN KEY (color_id) REFERENCES product_colors(id)
+      FOREIGN KEY (color_id, product_id) REFERENCES product_colors(id, product_id)
         ON UPDATE CASCADE
         ON DELETE CASCADE
     );
+
+    CREATE TRIGGER IF NOT EXISTS validate_variant_color_product_insert
+    BEFORE INSERT ON product_variants
+    WHEN NOT EXISTS (
+      SELECT 1
+      FROM product_colors
+      WHERE id = NEW.color_id AND product_id = NEW.product_id
+    )
+    BEGIN
+      SELECT RAISE(ABORT, 'variant color does not belong to product');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS validate_variant_color_product_update
+    BEFORE UPDATE OF product_id, color_id ON product_variants
+    WHEN NOT EXISTS (
+      SELECT 1
+      FROM product_colors
+      WHERE id = NEW.color_id AND product_id = NEW.product_id
+    )
+    BEGIN
+      SELECT RAISE(ABORT, 'variant color does not belong to product');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS validate_image_color_product_insert
+    BEFORE INSERT ON product_images
+    WHEN NEW.color_id IS NOT NULL AND NOT EXISTS (
+      SELECT 1
+      FROM product_colors
+      WHERE id = NEW.color_id AND product_id = NEW.product_id
+    )
+    BEGIN
+      SELECT RAISE(ABORT, 'image color does not belong to product');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS validate_image_color_product_update
+    BEFORE UPDATE OF product_id, color_id ON product_images
+    WHEN NEW.color_id IS NOT NULL AND NOT EXISTS (
+      SELECT 1
+      FROM product_colors
+      WHERE id = NEW.color_id AND product_id = NEW.product_id
+    )
+    BEGIN
+      SELECT RAISE(ABORT, 'image color does not belong to product');
+    END;
 
     CREATE INDEX IF NOT EXISTS idx_products_category
       ON products(category_id);

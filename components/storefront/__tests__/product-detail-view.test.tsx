@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import { ProductDetailView } from "../product-detail-view";
 
 const product = {
@@ -54,7 +54,29 @@ const product = {
   ],
 };
 
+afterEach(cleanup);
+
 describe("ProductDetailView", () => {
+  it("starts with the first color that has stock", () => {
+    const productWithLaterStock = {
+      ...product,
+      variants: product.variants.map((variant) => ({
+        ...variant,
+        stock: variant.colorId === 11 ? 2 : 0,
+        available: variant.colorId === 11,
+      })),
+    };
+
+    render(<ProductDetailView product={productWithLaterStock} />);
+
+    expect(screen.getByRole("button", { name: "رنگ کرم" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("img", { name: "تصویر کرم" })).toBeInTheDocument();
+    expect(screen.getByText("سایز را انتخاب کنید")).toBeInTheDocument();
+  });
+
   it("switches color images and reports independent size stock", () => {
     render(<ProductDetailView product={product} />);
 

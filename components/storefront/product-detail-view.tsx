@@ -18,7 +18,9 @@ export function ProductDetailView({
 }) {
   const initialColorId =
     product.colors.find((color) =>
-      product.variants.some((variant) => variant.colorId === color.id),
+      product.variants.some(
+        (variant) => variant.colorId === color.id && variant.available,
+      ),
     )?.id ??
     product.colors[0]?.id ??
     null;

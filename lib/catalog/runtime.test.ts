@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -7,6 +7,8 @@ import {
   loadHomepageCatalog,
   loadProductCatalog,
 } from "./runtime";
+import { migrateCatalogDatabase, openCatalogDatabase } from "./database";
+import { seedCatalogDatabase } from "./seed";
 
 let directory: string;
 let previousDatabasePath: string | undefined;
@@ -28,6 +30,11 @@ afterEach(() => {
 
 describe("catalog runtime loaders", () => {
   it("loads homepage, category, and product data from a closed-per-read database", async () => {
+    const database = openCatalogDatabase(process.env.DIA_DB_PATH);
+    migrateCatalogDatabase(database);
+    seedCatalogDatabase(database);
+    database.close();
+
     const homepage = await loadHomepageCatalog(0);
     const category = await loadCategoryCatalog("shoe-holder");
     const product = await loadProductCatalog("nobonian-holder-01");
@@ -42,5 +49,12 @@ describe("catalog runtime loaders", () => {
 
     expect(await loadCategoryCatalog("missing-category")).toBeNull();
     expect(await loadProductCatalog("missing-product")).toBeNull();
+  });
+
+  it("does not create or seed a missing database during a storefront read", async () => {
+    const filename = process.env.DIA_DB_PATH!;
+
+    await expect(loadHomepageCatalog(0)).rejects.toThrow();
+    expect(existsSync(filename)).toBe(false);
   });
 });
