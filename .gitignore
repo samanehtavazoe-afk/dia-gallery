@@ -25,6 +25,7 @@
 
 # local catalog database
 /.data/
+/.secrets/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
