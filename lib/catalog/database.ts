@@ -5,7 +5,9 @@ import { dirname, join } from "node:path";
 export type CatalogDatabase = InstanceType<typeof Database>;
 
 export function resolveCatalogDatabasePath(
-  environment: Pick<NodeJS.ProcessEnv, "DIA_DB_PATH" | "NODE_ENV"> = process.env,
+  environment: Partial<
+    Pick<NodeJS.ProcessEnv, "DIA_DB_PATH" | "NODE_ENV">
+  > = process.env,
   workingDirectory = process.cwd(),
 ) {
   return (

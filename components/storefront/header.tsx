@@ -16,12 +16,12 @@ export function Header() {
         </Link>
 
         <nav className="hidden items-center gap-4 whitespace-nowrap text-xs xl:flex" aria-label="منوی اصلی">
-          <a href="/shop">فروشگاه</a>
-          <a href="/category/women-underwear">لباس زیر زنانه</a>
-          <a href="/category/men-underwear">لباس زیر مردانه</a>
-          <a href="/category/men-undershirt">زیرپوش مردانه</a>
-          <a href="/category/hoodie">هودی</a>
-          <a href="/category/shoe-holder">هولدر کفش</a>
+          <Link href="/shop">فروشگاه</Link>
+          <Link href="/category/women-underwear">لباس زیر زنانه</Link>
+          <Link href="/category/men-underwear">لباس زیر مردانه</Link>
+          <Link href="/category/men-undershirt">زیرپوش مردانه</Link>
+          <Link href="/category/hoodie">هودی</Link>
+          <Link href="/category/shoe-holder">هولدر کفش</Link>
         </nav>
 
         <form className="me-auto hidden max-w-xs flex-1 md:block" role="search">
@@ -38,14 +38,14 @@ export function Header() {
 
         <div className="flex items-center gap-3">
           {actions.map((action) => (
-            <a
+            <Link
               key={action.href}
               href={action.href}
               aria-label={action.label}
               className="grid size-9 place-items-center rounded-full border border-[var(--line)] bg-white"
             >
               <span aria-hidden="true">{action.symbol}</span>
-            </a>
+            </Link>
           ))}
         </div>
       </div>

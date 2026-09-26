@@ -1,36 +1,35 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# فروشگاه دیا گالری
 
-## Getting Started
+فروشگاه با Next.js و دیتابیس SQLite ساخته شده است. اطلاعات دسته‌ها، محصولات، رنگ‌ها، سایزها، تصاویر و موجودی از دیتابیس خوانده می‌شود.
 
-First, run the development server:
+## راه‌اندازی توسعه
 
 ```bash
+npm ci
+npm run db:seed
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+دیتابیس توسعه به‌صورت پیش‌فرض در `.data/dia-gallery.sqlite` ساخته می‌شود و داخل Git قرار نمی‌گیرد.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## راه‌اندازی دیتابیس کاتالوگ روی سرور
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Node.js نسخه ۲۲ یا جدیدتر لازم است.
 
-## Learn More
+```bash
+sudo install -d -m 700 /var/lib/dia-gallery/data
+export DIA_DB_PATH=/var/lib/dia-gallery/data/dia-gallery.sqlite
+npm ci --ignore-scripts
+npm rebuild better-sqlite3
+npm run db:seed
+npm run build
+```
 
-To learn more about Next.js, take a look at the following resources:
+سرویس اصلی نیز باید متغیر `DIA_DB_PATH` را با همین مسیر دریافت کند و کاربر اجرای سرویس اجازهٔ خواندن و نوشتن در پوشهٔ دیتابیس را داشته باشد. دادهٔ نمونه فقط در اجرای نخست ثبت می‌شود و اجرای دوبارهٔ دستور، تغییرات بعدی محصولات را بازنویسی نمی‌کند.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+برای اجرای نسخهٔ ساخته‌شده:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+export DIA_DB_PATH=/var/lib/dia-gallery/data/dia-gallery.sqlite
+npm start -- -H 0.0.0.0 -p 3100
+```
